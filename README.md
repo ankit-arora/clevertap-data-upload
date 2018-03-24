@@ -5,7 +5,7 @@ Installation:
 go get github.com/ankit-arora/clevertap-csv-upload 
 ```
 
-Usage:
+Arguments:
 ```
   -csv string               Absolute path to the csv file
   
@@ -19,6 +19,12 @@ Usage:
   
   -dryrun                   Do a dry run, process records but do not upload
   
+```
+
+Example:
+```
+clevertap-csv-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX" -t="event" -evtName="Product Viewed"
+
 ```
 
 NOTE:  you must include one of identity, objectID, FBID or GPID, in your data.  Email addresses can serve as an identity value, but the key must be identity.
