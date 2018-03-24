@@ -1,6 +1,11 @@
 ## CleverTap golang csv upload tool
 
-##Usage:
+Installation:
+```
+go get github.com/ankit-arora/clevertap-csv-upload 
+```
+
+Usage:
 ```
   -csv string               Absolute path to the csv file
   
