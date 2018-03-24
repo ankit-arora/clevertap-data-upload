@@ -1,0 +1,215 @@
+package commands
+
+import (
+	"strings"
+	"sync"
+
+	"time"
+
+	"strconv"
+
+	"log"
+
+	"github.com/ankit-arora/clevertap-csv-upload/globals"
+)
+
+const (
+	batchSize      = 500
+	concurrency    = 3
+	uploadEndpoint = "https://api.clevertap.com/1/upload"
+)
+
+type uploadEventsProfilesCommand struct {
+}
+
+func (u *uploadEventsProfilesCommand) Execute() {
+	done := make(chan interface{})
+
+	if *globals.DryRun {
+		processCSVLineForUpload(done, csvLineGenerator(done))
+	} else {
+		var wg sync.WaitGroup
+		batchAndSend(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
+		wg.Wait()
+	}
+
+	log.Println("done")
+}
+
+func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *sync.WaitGroup) {
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var dataSlice []interface{}
+			for e := range recordStream {
+				select {
+				case <-done:
+					return
+				default:
+					dataSlice = append(dataSlice, e)
+					if len(dataSlice) == batchSize {
+						p := make(map[string]interface{})
+						p["d"] = dataSlice
+						sendData(p, uploadEndpoint)
+						dataSlice = nil
+					}
+				}
+			}
+			if len(dataSlice) > 0 {
+				select {
+				case <-done:
+					return
+				default:
+					p := make(map[string]interface{})
+					p["d"] = dataSlice
+					sendData(p, uploadEndpoint)
+					dataSlice = nil
+				}
+			}
+		}()
+	}
+}
+
+//identity, objectID, FBID or GPID
+
+var headerKeys []string
+var keysLen int
+var tsExists = false
+
+func isIdentity(val string) bool {
+	if val == "identity" || val == "objectID" || val == "FBID" || val == "GPID" {
+		return true
+	}
+	return false
+}
+
+func processHeader(keys []string) bool {
+	identityExists := false
+
+	for _, val := range keys {
+		if isIdentity(val) {
+			identityExists = true
+		}
+		if val == "ts" {
+			tsExists = true
+		}
+	}
+	if !identityExists {
+		log.Println("identity, objectID, FBID or GPID should be present")
+		return false
+	}
+
+	if !tsExists {
+		log.Println("ts is missing. It will default to the current timestamp")
+	}
+	keysLen = len(keys)
+	headerKeys = keys
+	return true
+}
+
+func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
+	rowLen := len(vals)
+	if rowLen != keysLen {
+		log.Println("Mismatch in header and row data length")
+		return nil, false
+	}
+	record := make(map[string]interface{})
+	if !tsExists {
+		record["ts"] = time.Now().Unix()
+	}
+	record["type"] = *globals.Type
+	if *globals.Type == "event" {
+		record["evtName"] = *globals.EvtName
+	}
+	propertyData := make(map[string]interface{})
+
+	for index, ep := range vals {
+		key := headerKeys[index]
+		if isIdentity(key) {
+			if ep == "" {
+				log.Println("Identity field is missing.")
+				return nil, false
+			}
+			record[key] = ep
+			continue
+		}
+
+		if key == "evtName" && *globals.Type == "event" {
+			if ep != *globals.EvtName {
+				log.Println("Event name in record is different from command line option.")
+				return nil, false
+			}
+			continue
+		}
+
+		if key == "ts" {
+			epTs := time.Now().Unix()
+			if ep == "" {
+				log.Println("Timestamp is missing. It will default to the current timestamp for: ")
+				log.Println(line)
+				record["ts"] = epTs
+				continue
+			}
+
+			epI, err := strconv.Atoi(ep)
+
+			if err != nil {
+				log.Println("Timestamp is in wrong format. Should be an epoch in seconds")
+				return nil, false
+			}
+
+			epTs = int64(epI)
+			record["ts"] = epTs
+			continue
+		}
+
+		propertyData[key] = ep
+	}
+
+	if *globals.Type == "event" {
+		record["evtData"] = propertyData
+	}
+	if *globals.Type == "profile" {
+		record["profileData"] = propertyData
+	}
+
+	return record, true
+}
+
+func processCSVLineForUpload(done chan interface{}, rowStream <-chan csvLineInfo) <-chan interface{} {
+	recordStream := make(chan interface{})
+	go func() {
+		defer close(recordStream)
+		for lineInfo := range rowStream {
+			i := lineInfo.LineNum
+			l := lineInfo.Line
+			sLine := strings.Split(l, ",")
+			if i == 0 {
+				//header: line just process to get keys
+				if !processHeader(sLine) {
+					select {
+					case <-done:
+						return
+					default:
+						done <- struct{}{}
+						log.Println("...Exiting...")
+						return
+					}
+				}
+			} else {
+				record, shouldAdd := processCSVUploadLine(sLine, l)
+				if shouldAdd {
+					select {
+					case <-done:
+						return
+					case recordStream <- record:
+					}
+				} else {
+					log.Println("Skipping: ", l)
+				}
+			}
+		}
+	}()
+	return recordStream
+}
