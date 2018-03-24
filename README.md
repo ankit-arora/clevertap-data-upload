@@ -1,4 +1,5 @@
 ## CleverTap golang csv upload tool
+
 ###Usage:
 
 ```
@@ -15,3 +16,5 @@
   -dryrun                   Do a dry run, process records but do not upload
   
 ```
+
+NOTE:  you must include one of identity, objectID, FBID or GPID, in your data.  Email addresses can serve as an identity value, but the key must be identity.
