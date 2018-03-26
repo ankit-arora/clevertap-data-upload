@@ -11,10 +11,11 @@ import (
 	"log"
 
 	"github.com/ankit-arora/clevertap-csv-upload/globals"
+	"encoding/csv"
 )
 
 const (
-	batchSize      = 500
+	batchSize      = 1000
 	concurrency    = 3
 	uploadEndpoint = "https://api.clevertap.com/1/upload"
 )
@@ -23,15 +24,13 @@ type uploadEventsProfilesCommand struct {
 }
 
 func (u *uploadEventsProfilesCommand) Execute() {
+	log.Println("started")
+
 	done := make(chan interface{})
 
-	if *globals.DryRun {
-		processCSVLineForUpload(done, csvLineGenerator(done))
-	} else {
-		var wg sync.WaitGroup
-		batchAndSend(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
-		wg.Wait()
-	}
+	var wg sync.WaitGroup
+	batchAndSend(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
+	wg.Wait()
 
 	log.Println("done")
 }
@@ -184,7 +183,26 @@ func processCSVLineForUpload(done chan interface{}, rowStream <-chan csvLineInfo
 		for lineInfo := range rowStream {
 			i := lineInfo.LineNum
 			l := lineInfo.Line
-			sLine := strings.Split(l, ",")
+			//sLine := strings.Split(l, ",")
+			r := csv.NewReader(strings.NewReader(l))
+			sLineArr, err := r.ReadAll()
+			if err != nil || len(sLineArr) != 1 {
+				if i == 0 {
+					log.Println("Error in processing header")
+					select {
+					case <-done:
+						return
+					default:
+						done <- struct{}{}
+						log.Println("...Exiting...")
+						return
+					}
+				}
+				log.Println("Error in processing record")
+				log.Println("Skipping line number: ", i + 1, " : ", l)
+				continue
+			}
+			sLine := sLineArr[0]
 			if i == 0 {
 				//header: line just process to get keys
 				if !processHeader(sLine) {
@@ -206,7 +224,7 @@ func processCSVLineForUpload(done chan interface{}, rowStream <-chan csvLineInfo
 					case recordStream <- record:
 					}
 				} else {
-					log.Println("Skipping: ", l)
+					log.Println("Skipping line number: ", i + 1, " : ", l)
 				}
 			}
 		}

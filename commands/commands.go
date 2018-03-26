@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ankit-arora/clevertap-csv-upload/globals"
+	"os"
 )
 
 type Command interface {
@@ -24,11 +25,10 @@ func Get() Command {
 
 func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 
-	//json.NewEncoder(os.Stdout).Encode(payload)
-	//
-	//if true {
-	//	return
-	//}
+	if *globals.DryRun {
+		json.NewEncoder(os.Stdout).Encode(payload)
+		return "", nil
+	}
 
 	client := &http.Client{}
 	for {
@@ -49,7 +49,7 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 		if err == nil && resp.StatusCode == 200 {
 			body, _ := ioutil.ReadAll(resp.Body)
 			responseText := string(body)
-			//fmt.Println("response Body:", responseText)
+			log.Println("response body: ", responseText)
 			//{ "status" : "success" , "processed" : 2 , "unprocessed" : [ ]}
 			resp.Body.Close()
 			return responseText, nil
@@ -58,7 +58,10 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 		if err != nil {
 			log.Println("Error", err)
 		} else {
-			log.Println("Error Status Code", resp.StatusCode)
+			body, _ := ioutil.ReadAll(resp.Body)
+			log.Println("response body: ", string(body))
+			log.Println("response body: ", "retrying for payload: ")
+			json.NewEncoder(os.Stdout).Encode(payload)
 		}
 		if resp != nil {
 			resp.Body.Close()

@@ -22,10 +22,15 @@ Arguments:
   
 ```
 
-Example:
+Example Events upload:
 ```
 clevertap-csv-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX" -t="event" -evtName="Product Viewed"
 
+```
+
+Example Profiles upload:
+```
+clevertap-csv-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX"
 ```
 
 NOTE:  you must include one of identity, objectID, FBID or GPID, in your data.  Email addresses can serve as an identity value, but the key must be identity.
