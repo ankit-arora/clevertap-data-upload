@@ -3,6 +3,7 @@
 Installation:
 ```
 go get github.com/ankit-arora/clevertap-csv-upload 
+go install github.com/ankit-arora/clevertap-csv-upload
 ```
 
 Arguments:
