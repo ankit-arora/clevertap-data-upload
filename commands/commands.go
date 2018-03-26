@@ -60,7 +60,7 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 		} else {
 			body, _ := ioutil.ReadAll(resp.Body)
 			log.Println("response body: ", string(body))
-			log.Println("response body: ", "retrying for payload: ")
+			log.Println("response body: ", "retrying for payload after 20 seconds: ")
 			json.NewEncoder(os.Stdout).Encode(payload)
 		}
 		if resp != nil {
