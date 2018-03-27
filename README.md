@@ -18,6 +18,8 @@ Arguments:
   
   -evtName string           Event name. Required only when uploading events. Each CSV file can only have one type of event
   
+  -r string                 The account region, either eu or in, defaults to eu (default "eu")
+  
   -dryrun                   Do a dry run, process records but do not upload
   
 ```

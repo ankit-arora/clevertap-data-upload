@@ -17,7 +17,7 @@ import (
 const (
 	batchSize      = 1000
 	concurrency    = 3
-	uploadEndpoint = "https://api.clevertap.com/1/upload"
+	uploadEndpoint = "api.clevertap.com/1/upload"
 )
 
 type uploadEventsProfilesCommand struct {
@@ -40,6 +40,10 @@ func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			region := ""
+			if *globals.Region == "in" {
+				region = "in."
+			}
 			var dataSlice []interface{}
 			for e := range recordStream {
 				select {
@@ -50,7 +54,7 @@ func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *
 					if len(dataSlice) == batchSize {
 						p := make(map[string]interface{})
 						p["d"] = dataSlice
-						sendData(p, uploadEndpoint)
+						sendData(p, "https://" + region + uploadEndpoint)
 						dataSlice = nil
 					}
 				}
@@ -62,7 +66,7 @@ func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *
 				default:
 					p := make(map[string]interface{})
 					p["d"] = dataSlice
-					sendData(p, uploadEndpoint)
+					sendData(p, "https://" + region + uploadEndpoint)
 					dataSlice = nil
 				}
 			}

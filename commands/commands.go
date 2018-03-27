@@ -46,7 +46,7 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 		req.Header.Add("X-CleverTap-Passcode", *globals.AccountPasscode)
 
 		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode == 200 {
+		if err == nil && resp.StatusCode <= 500 {
 			body, _ := ioutil.ReadAll(resp.Body)
 			responseText := string(body)
 			log.Println("response body: ", responseText)
