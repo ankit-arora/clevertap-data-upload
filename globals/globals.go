@@ -25,7 +25,7 @@ func Init() bool {
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
 	if *CSVFilePath == "" || *AccountID == "" || *AccountPasscode == "" {
-		log.Println("CSV file path, accoun id, and passcode are mandatory")
+		log.Println("CSV file path, account id, and passcode are mandatory")
 		return false
 	}
 	if *Type != "profile" && *Type != "event" {
