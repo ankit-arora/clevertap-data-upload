@@ -10,8 +10,9 @@ import (
 
 	"log"
 
-	"github.com/ankit-arora/clevertap-csv-upload/globals"
 	"encoding/csv"
+
+	"github.com/ankit-arora/clevertap-csv-upload/globals"
 )
 
 const (
@@ -54,7 +55,7 @@ func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *
 					if len(dataSlice) == batchSize {
 						p := make(map[string]interface{})
 						p["d"] = dataSlice
-						sendData(p, "https://" + region + uploadEndpoint)
+						sendData(p, "https://"+region+uploadEndpoint)
 						dataSlice = nil
 					}
 				}
@@ -66,7 +67,7 @@ func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *
 				default:
 					p := make(map[string]interface{})
 					p["d"] = dataSlice
-					sendData(p, "https://" + region + uploadEndpoint)
+					sendData(p, "https://"+region+uploadEndpoint)
 					dataSlice = nil
 				}
 			}
@@ -81,7 +82,7 @@ var keysLen int
 var tsExists = false
 
 func isIdentity(val string) bool {
-	if val == "identity" || val == "objectID" || val == "FBID" || val == "GPID" {
+	if val == "identity" || val == "objectId" || val == "FBID" || val == "GPID" {
 		return true
 	}
 	return false
@@ -203,7 +204,7 @@ func processCSVLineForUpload(done chan interface{}, rowStream <-chan csvLineInfo
 					}
 				}
 				log.Println("Error in processing record")
-				log.Println("Skipping line number: ", i + 1, " : ", l)
+				log.Println("Skipping line number: ", i+1, " : ", l)
 				continue
 			}
 			sLine := sLineArr[0]
@@ -228,7 +229,7 @@ func processCSVLineForUpload(done chan interface{}, rowStream <-chan csvLineInfo
 					case recordStream <- record:
 					}
 				} else {
-					log.Println("Skipping line number: ", i + 1, " : ", l)
+					log.Println("Skipping line number: ", i+1, " : ", l)
 				}
 			}
 		}
