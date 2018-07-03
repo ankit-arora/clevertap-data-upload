@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/ankit-arora/clevertap-csv-upload/commands"
-	"github.com/ankit-arora/clevertap-csv-upload/globals"
+	"github.com/ankit-arora/clevertap-data-upload/commands"
+	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
 func main() {

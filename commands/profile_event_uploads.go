@@ -12,7 +12,7 @@ import (
 
 	"encoding/csv"
 
-	"github.com/ankit-arora/clevertap-csv-upload/globals"
+	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
 const (
@@ -21,10 +21,10 @@ const (
 	uploadEndpoint = "api.clevertap.com/1/upload"
 )
 
-type uploadEventsProfilesCommand struct {
+type uploadEventsProfilesFromCSVCommand struct {
 }
 
-func (u *uploadEventsProfilesCommand) Execute() {
+func (u *uploadEventsProfilesFromCSVCommand) Execute() {
 	log.Println("started")
 
 	done := make(chan interface{})

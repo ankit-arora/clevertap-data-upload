@@ -6,6 +6,7 @@ import (
 )
 
 var CSVFilePath *string
+var MixpanelSecret *string
 var AccountID *string
 var AccountPasscode *string
 var EvtName *string
@@ -16,6 +17,7 @@ var DryRun *bool
 
 func Init() bool {
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
+	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
 	AccountID = flag.String("id", "", "CleverTap Account ID")
 	AccountPasscode = flag.String("p", "", "CleverTap Account Passcode")
 	EvtName = flag.String("evtName", "", "Event name")
@@ -24,20 +26,24 @@ func Init() bool {
 	DryRun = flag.Bool("dryrun", false, "Do a dry run, process records but do not upload")
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
-	if *CSVFilePath == "" || *AccountID == "" || *AccountPasscode == "" {
-		log.Println("CSV file path, account id, and passcode are mandatory")
+	if (*CSVFilePath == "" && *MixpanelSecret == "") || *AccountID == "" || *AccountPasscode == "" {
+		log.Println("Mixpanel secret or CSV file path, account id, and passcode are mandatory")
+		return false
+	}
+	if *CSVFilePath != "" && *MixpanelSecret != "" {
+		log.Println("Both Mixpanel secret and CSV file path detected. Only one data source is allowed")
 		return false
 	}
 	if *Type != "profile" && *Type != "event" {
-		log.Println("type can be either profile or event")
+		log.Println("Type can be either profile or event")
 		return false
 	}
-	if *EvtName == "" && *Type == "event" {
-		log.Println("event name is mandatory for event uploads")
+	if *CSVFilePath != "" && *EvtName == "" && *Type == "event" {
+		log.Println("Event name is mandatory for event csv uploads")
 		return false
 	}
 	if *Region != "eu" && *Region != "in" {
-		log.Println("region can be either eu or in")
+		log.Println("Region can be either eu or in")
 		return false
 	}
 	return true

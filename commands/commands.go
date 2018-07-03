@@ -8,8 +8,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ankit-arora/clevertap-csv-upload/globals"
 	"os"
+
+	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
 type Command interface {
@@ -17,9 +18,14 @@ type Command interface {
 }
 
 func Get() Command {
-	if *globals.Type == "profile" || *globals.Type == "event" {
-		return &uploadEventsProfilesCommand{}
+	if *globals.CSVFilePath != "" && (*globals.Type == "profile" || *globals.Type == "event") {
+		return &uploadEventsProfilesFromCSVCommand{}
 	}
+
+	if *globals.MixpanelSecret != "" && (*globals.Type == "profile" || *globals.Type == "event") {
+		return &uploadProfilesFromMixpanel{}
+	}
+
 	return nil
 }
 
