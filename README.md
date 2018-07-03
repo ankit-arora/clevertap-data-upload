@@ -1,9 +1,9 @@
-## CleverTap golang csv upload tool
+## CleverTap golang data upload tool
 
 Installation:
 ```
-go get github.com/ankit-arora/clevertap-csv-upload 
-go install github.com/ankit-arora/clevertap-csv-upload
+go get github.com/ankit-arora/clevertap-data-upload 
+go install github.com/ankit-arora/clevertap-data-upload
 ```
 
 Arguments:
@@ -24,15 +24,15 @@ Arguments:
   
 ```
 
-Example Events upload:
+Example Events upload from CSV:
 ```
-clevertap-csv-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX" -t="event" -evtName="Product Viewed"
+clevertap-data-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX" -t="event" -evtName="Product Viewed"
 
 ```
 
-Example Profiles upload:
+Example Profiles upload from CSV:
 ```
-clevertap-csv-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX"
+clevertap-data-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX"
 ```
 
-NOTE:  you must include one of identity, objectID, FBID or GPID, in your data.  Email addresses can serve as an identity value, but the key must be identity.
+NOTE:  you must include one of identity, objectId, FBID or GPID, in your data.  Email addresses can serve as an identity value, but the key must be identity.
