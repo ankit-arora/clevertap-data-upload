@@ -10,6 +10,8 @@ import (
 
 	"os"
 
+	"fmt"
+
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
@@ -22,7 +24,7 @@ func Get() Command {
 		return &uploadEventsProfilesFromCSVCommand{}
 	}
 
-	if *globals.MixpanelSecret != "" && (*globals.Type == "profile" || *globals.Type == "event") {
+	if *globals.MixpanelSecret != "" && *globals.Type == "profile" {
 		return &uploadProfilesFromMixpanel{}
 	}
 
@@ -52,11 +54,15 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 		req.Header.Add("X-CleverTap-Passcode", *globals.AccountPasscode)
 
 		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode <= 500 {
+		if err == nil && resp.StatusCode < 500 {
 			body, _ := ioutil.ReadAll(resp.Body)
 			responseText := string(body)
-			log.Println("response body: ", responseText)
+			log.Println("response body: ", responseText, resp.StatusCode)
 			//{ "status" : "success" , "processed" : 2 , "unprocessed" : [ ]}
+			if resp.StatusCode == 400 {
+				fmt.Println("status 400 for:")
+				json.NewEncoder(os.Stdout).Encode(payload)
+			}
 			resp.Body.Close()
 			return responseText, nil
 		}

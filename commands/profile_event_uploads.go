@@ -16,10 +16,11 @@ import (
 )
 
 const (
-	batchSize      = 1000
 	concurrency    = 3
 	uploadEndpoint = "api.clevertap.com/1/upload"
 )
+
+var ctBatchSize = 1000
 
 type uploadEventsProfilesFromCSVCommand struct {
 }
@@ -52,7 +53,7 @@ func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *
 					return
 				default:
 					dataSlice = append(dataSlice, e)
-					if len(dataSlice) == batchSize {
+					if len(dataSlice) == ctBatchSize {
 						p := make(map[string]interface{})
 						p["d"] = dataSlice
 						sendData(p, "https://"+region+uploadEndpoint)

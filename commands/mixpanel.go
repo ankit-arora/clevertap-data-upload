@@ -12,29 +12,38 @@ import (
 
 	"time"
 
+	"strings"
+
+	"sync"
+
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
-const MIXPANEL_PROFILES_EXPORT_EP = "https://mixpanel.com/api/2.0/engage/"
+const (
+	MIXPANEL_PROFILES_EXPORT_EP = "https://mixpanel.com/api/2.0/engage/"
+	MAX_PROPS_COUNT             = 255
+)
+
+var PROPERTIES_MAP = map[string]string{
+	"name":          "Name",
+	"email":         "Email",
+	"gender":        "Gender",
+	"facebook_id":   "fbId",
+	"timezone":      "Timezone",
+	"date_of_birth": "Birthday",
+}
 
 type uploadProfilesFromMixpanel struct {
 }
 
 func (u *uploadProfilesFromMixpanel) Execute() {
 	log.Println("started")
-
-	//done := make(chan interface{})
-	//
-	//var wg sync.WaitGroup
-	//batchAndSend(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
-	//wg.Wait()
-
+	//ct batch size of 100 for MP
+	ctBatchSize = 100
+	var wg sync.WaitGroup
 	done := make(chan interface{})
-	mixpanelRecordStream := mixpanelProfileRecordsGenerator(done)
-	for info := range mixpanelRecordStream {
-		info.print()
-	}
-
+	batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
+	wg.Wait()
 	log.Println("done")
 }
 
@@ -70,13 +79,57 @@ type mixpanelProfileRecordInfo struct {
 }
 
 func (p *mixpanelProfileRecordInfo) convertToCT() ([]interface{}, error) {
+	records := make([]interface{}, 0)
 
-	return nil, nil
+	for _, r := range p.Results {
+		identity := r.DistinctId
+		if identity != "" {
+			record := make(map[string]interface{})
+			record["identity"] = identity
+			record["ts"] = time.Now().Unix()
+			record["type"] = "profile"
+			propertyData := make(map[string]interface{})
+			propsCount := 0
+			for k, v := range r.Properties {
+				if propsCount > MAX_PROPS_COUNT {
+					break
+				}
+				if v == nil {
+					continue
+				}
+
+				//rt := reflect.TypeOf(v)
+				//switch rt.Kind() {
+				//case reflect.Slice:
+				//	continue
+				//case reflect.Array:
+				//	continue
+				//default:
+				//
+				//}
+
+				if strings.HasPrefix(k, "$") {
+					k = k[1:]
+				}
+
+				if nK, ok := PROPERTIES_MAP["k"]; ok {
+					k = nK
+				}
+				propertyData[k] = v
+				record["profileData"] = propertyData
+				propsCount++
+			}
+			records = append(records, record)
+		} else {
+			log.Printf("Identity not found for record. Skipping: %v", r)
+		}
+	}
+	return records, nil
 }
 
 func (p *mixpanelProfileRecordInfo) print() {
 	log.Printf("First Result: %v", p.Results[0])
-	log.Printf("Results size : %v", len(p.Results))
+	log.Printf("Results size: %v", len(p.Results))
 }
 
 func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan mixpanelRecordInfo {
@@ -165,10 +218,10 @@ func processMixpanelRecordForUpload(done chan interface{}, mixpanelRecordStream 
 	recordStream := make(chan interface{})
 	go func() {
 		defer close(recordStream)
-		for recordInfo := range mixpanelRecordStream {
-			records, err := recordInfo.convertToCT()
+		for mpRecordInfo := range mixpanelRecordStream {
+			ctRecords, err := mpRecordInfo.convertToCT()
 			if err != nil {
-				log.Println("Error converting Micpanel records to Clevertap", err)
+				log.Println("Error converting Micpanel ctRecords to Clevertap", err)
 				select {
 				case <-done:
 					return
@@ -177,11 +230,11 @@ func processMixpanelRecordForUpload(done chan interface{}, mixpanelRecordStream 
 					return
 				}
 			}
-			for record := range records {
+			for _, ctRecord := range ctRecords {
 				select {
 				case <-done:
 					return
-				case recordStream <- record:
+				case recordStream <- ctRecord:
 				}
 			}
 		}
