@@ -3,21 +3,26 @@ package globals
 import (
 	"flag"
 	"log"
+	"time"
 )
 
 var CSVFilePath *string
 var MixpanelSecret *string
+var StartDate *string
 var AccountID *string
 var AccountPasscode *string
 var EvtName *string
 var Type *string
 var Region *string
 var DryRun *bool
+
 //var AutoConvert *bool
 
 func Init() bool {
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
 	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
+	StartDate = flag.String("startDate", "", "Start date for exporting events from Mixpanel "+
+		"<yyyy-mm--dd>")
 	AccountID = flag.String("id", "", "CleverTap Account ID")
 	AccountPasscode = flag.String("p", "", "CleverTap Account Passcode")
 	EvtName = flag.String("evtName", "", "Event name")
@@ -41,6 +46,18 @@ func Init() bool {
 	if *CSVFilePath != "" && *EvtName == "" && *Type == "event" {
 		log.Println("Event name is mandatory for event csv uploads")
 		return false
+	}
+	if *MixpanelSecret != "" && *Type == "event" && *StartDate == "" {
+		log.Println("Start date is mandatory when exporting events from Mixpanel. Format: <yyyy-mm-dd>")
+		return false
+	}
+	if *MixpanelSecret != "" && *Type == "event" && *StartDate != "" {
+		//check start date format
+		_, err := time.Parse("2006-01-02", *StartDate)
+		if err != nil {
+			log.Println("Start date is not in correct format. Format: <yyyy-mm-dd>")
+			return false
+		}
 	}
 	if *Region != "eu" && *Region != "in" {
 		log.Println("Region can be either eu or in")

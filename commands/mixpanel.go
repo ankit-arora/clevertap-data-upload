@@ -21,8 +21,13 @@ import (
 
 const (
 	MIXPANEL_PROFILES_EXPORT_EP = "https://mixpanel.com/api/2.0/engage/"
+	MIXPANEL_EVENTS_EXPORT_EP   = "https://data.mixpanel.com/api/2.0/export/"
 	MAX_PROPS_COUNT             = 255
 )
+
+var RESTRICTED_EVENTS = []string{
+	"Notification Sent", "Notification Viewed", "Notification Clicked", "UTM Visited", "App Launched", "App Uninstalled", "Stayed",
+}
 
 var PROPERTIES_MAP = map[string]string{
 	"name":          "Name",
@@ -240,4 +245,101 @@ func processMixpanelRecordForUpload(done chan interface{}, mixpanelRecordStream 
 		}
 	}()
 	return recordStream
+}
+
+type uploadEventsFromMixpanel struct {
+}
+
+func (u *uploadEventsFromMixpanel) Execute() {
+	log.Println("started")
+	//ct batch size of 100 for MP
+	//ctBatchSize = 100
+	//var wg sync.WaitGroup
+	done := make(chan interface{})
+	//batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
+	//wg.Wait()
+
+	mixpanelEventRecordsGenerator(done)
+
+	log.Println("done")
+}
+
+func mixpanelEventRecordsGenerator(done chan interface{}) <-chan mixpanelRecordInfo {
+	mixpanelRecordStream := make(chan mixpanelRecordInfo)
+	go func() {
+		defer close(mixpanelRecordStream)
+		//client := &http.Client{Timeout: time.Minute * 4}
+		//startDate := *globals.StartDate
+		//endDate := time.Now().Local().Format("2006-01-02")
+		//encodedSecret := base64.StdEncoding.EncodeToString([]byte(*globals.MixpanelSecret))
+		//for {
+		//	log.Printf("Fetching events data from Mixpanel for page: %v", startDate)
+		//	endpoint := fmt.Sprintf(MIXPANEL_EVENTS_EXPORT_EP+"?from_date=%v&to_date=%v", startDate, startDate)
+		//	req, err := http.NewRequest("GET", endpoint, nil)
+		//	if err != nil {
+		//		log.Fatal(err)
+		//		select {
+		//		case <-done:
+		//			return
+		//		default:
+		//			done <- struct{}{}
+		//			return
+		//		}
+		//	}
+		//	req.Header.Add("Authorization", "Basic "+encodedSecret)
+		//	resp, err := client.Do(req)
+		//	if err == nil && resp.StatusCode <= 500 {
+		//
+		//		if err != nil {
+		//			log.Println("Error parsing json response from Mixpanel", err)
+		//			select {
+		//			case <-done:
+		//				return
+		//			default:
+		//				done <- struct{}{}
+		//				return
+		//			}
+		//		}
+		//
+		//		ioutil.ReadAll(resp.Body)
+		//		resp.Body.Close()
+		//
+		//		select {
+		//		case <-done:
+		//			return
+		//		case mixpanelRecordStream <- info:
+		//		}
+		//
+		//		if sessionId == "" {
+		//			pageSize = info.PageSize
+		//			sessionId = info.SessionId
+		//			log.Printf("Mixpanel request page size: %v", pageSize)
+		//			log.Printf("Mixpanel request session id: %v", sessionId)
+		//		}
+		//		if len(info.Results) < pageSize {
+		//			//got less number of results from pageSize. End of response
+		//			break
+		//		}
+		//		//continue with next session id and page
+		//		page = strconv.Itoa(info.Page + 1)
+		//		continue
+		//	}
+		//	if err != nil {
+		//		log.Println("Error while fetching data from Mixpanel: ", err)
+		//		log.Println("retrying after 20 seconds")
+		//	} else {
+		//		body, _ := ioutil.ReadAll(resp.Body)
+		//		log.Println("response body: ", string(body))
+		//		log.Printf("retrying for session_id : %v and page : %v after 20 seconds", sessionId, page)
+		//	}
+		//	if resp != nil {
+		//		resp.Body.Close()
+		//	}
+		//	time.Sleep(20 * time.Second)
+		//	if startDate == endDate {
+		//		break
+		//	}
+		//}
+	}()
+	return mixpanelRecordStream
 }

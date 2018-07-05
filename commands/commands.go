@@ -28,6 +28,10 @@ func Get() Command {
 		return &uploadProfilesFromMixpanel{}
 	}
 
+	if *globals.MixpanelSecret != "" && *globals.Type == "event" {
+		return &uploadEventsFromMixpanel{}
+	}
+
 	return nil
 }
 
