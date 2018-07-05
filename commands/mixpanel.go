@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"strings"
 
 	"sync"
+
+	"bufio"
 
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
@@ -151,7 +154,7 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan mixpanelRecor
 			if sessionId != "" {
 				endpoint += "?session_id=" + sessionId + "&page=" + page
 			}
-			log.Printf("Fetching data from Mixpanel for page: %v", page)
+			log.Printf("Fetching profiles data from Mixpanel for page: %v", page)
 			req, err := http.NewRequest("GET", endpoint, nil)
 			if err != nil {
 				log.Fatal(err)
@@ -169,14 +172,12 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan mixpanelRecor
 				info := &mixpanelProfileRecordInfo{}
 				err = json.NewDecoder(resp.Body).Decode(info)
 				if err != nil {
-					log.Println("Error parsing json response from Mixpanel", err)
-					select {
-					case <-done:
-						return
-					default:
-						done <- struct{}{}
-						return
-					}
+					log.Println("Error parsing profiles json response from Mixpanel", err)
+					log.Printf("retrying for session_id : %v and page : %v after 20 seconds", sessionId, page)
+					ioutil.ReadAll(resp.Body)
+					resp.Body.Close()
+					time.Sleep(20 * time.Second)
+					continue
 				}
 
 				ioutil.ReadAll(resp.Body)
@@ -226,7 +227,7 @@ func processMixpanelRecordForUpload(done chan interface{}, mixpanelRecordStream 
 		for mpRecordInfo := range mixpanelRecordStream {
 			ctRecords, err := mpRecordInfo.convertToCT()
 			if err != nil {
-				log.Println("Error converting Micpanel ctRecords to Clevertap", err)
+				log.Println("Error converting Mixpanel ctRecords to Clevertap", err)
 				select {
 				case <-done:
 					return
@@ -259,87 +260,114 @@ func (u *uploadEventsFromMixpanel) Execute() {
 	//batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
 	//wg.Wait()
 
-	mixpanelEventRecordsGenerator(done)
+	count := 0
+
+	recordStream := mixpanelEventRecordsGenerator(done)
+
+	for info := range recordStream {
+		info.print()
+		count++
+	}
+
+	log.Println("\n\n\nrecord count: ", count)
 
 	log.Println("done")
+}
+
+type mixpanelEventRecordInfo struct {
+	Event      string                 `json:"event"`
+	Properties map[string]interface{} `json:"properties"`
+}
+
+func (e *mixpanelEventRecordInfo) convertToCT() ([]interface{}, error) {
+	records := make([]interface{}, 0)
+
+	return records, nil
+}
+
+func (e *mixpanelEventRecordInfo) print() {
+	//fmt.Printf("\nresponse: %v", e.response)
 }
 
 func mixpanelEventRecordsGenerator(done chan interface{}) <-chan mixpanelRecordInfo {
 	mixpanelRecordStream := make(chan mixpanelRecordInfo)
 	go func() {
 		defer close(mixpanelRecordStream)
-		//client := &http.Client{Timeout: time.Minute * 4}
-		//startDate := *globals.StartDate
-		//endDate := time.Now().Local().Format("2006-01-02")
-		//encodedSecret := base64.StdEncoding.EncodeToString([]byte(*globals.MixpanelSecret))
-		//for {
-		//	log.Printf("Fetching events data from Mixpanel for page: %v", startDate)
-		//	endpoint := fmt.Sprintf(MIXPANEL_EVENTS_EXPORT_EP+"?from_date=%v&to_date=%v", startDate, startDate)
-		//	req, err := http.NewRequest("GET", endpoint, nil)
-		//	if err != nil {
-		//		log.Fatal(err)
-		//		select {
-		//		case <-done:
-		//			return
-		//		default:
-		//			done <- struct{}{}
-		//			return
-		//		}
-		//	}
-		//	req.Header.Add("Authorization", "Basic "+encodedSecret)
-		//	resp, err := client.Do(req)
-		//	if err == nil && resp.StatusCode <= 500 {
-		//
-		//		if err != nil {
-		//			log.Println("Error parsing json response from Mixpanel", err)
-		//			select {
-		//			case <-done:
-		//				return
-		//			default:
-		//				done <- struct{}{}
-		//				return
-		//			}
-		//		}
-		//
-		//		ioutil.ReadAll(resp.Body)
-		//		resp.Body.Close()
-		//
-		//		select {
-		//		case <-done:
-		//			return
-		//		case mixpanelRecordStream <- info:
-		//		}
-		//
-		//		if sessionId == "" {
-		//			pageSize = info.PageSize
-		//			sessionId = info.SessionId
-		//			log.Printf("Mixpanel request page size: %v", pageSize)
-		//			log.Printf("Mixpanel request session id: %v", sessionId)
-		//		}
-		//		if len(info.Results) < pageSize {
-		//			//got less number of results from pageSize. End of response
-		//			break
-		//		}
-		//		//continue with next session id and page
-		//		page = strconv.Itoa(info.Page + 1)
-		//		continue
-		//	}
-		//	if err != nil {
-		//		log.Println("Error while fetching data from Mixpanel: ", err)
-		//		log.Println("retrying after 20 seconds")
-		//	} else {
-		//		body, _ := ioutil.ReadAll(resp.Body)
-		//		log.Println("response body: ", string(body))
-		//		log.Printf("retrying for session_id : %v and page : %v after 20 seconds", sessionId, page)
-		//	}
-		//	if resp != nil {
-		//		resp.Body.Close()
-		//	}
-		//	time.Sleep(20 * time.Second)
-		//	if startDate == endDate {
-		//		break
-		//	}
-		//}
+		client := &http.Client{Timeout: time.Minute * 240}
+		eventsDate := *globals.StartDate
+		endDate := time.Now().Local().Format("2006-01-02")
+		log.Printf("Fetching events with start date: %v and end date: %v ", eventsDate, endDate)
+		encodedSecret := base64.StdEncoding.EncodeToString([]byte(*globals.MixpanelSecret))
+		for {
+			log.Printf("Fetching events data from Mixpanel for date: %v", eventsDate)
+			endpoint := fmt.Sprintf(MIXPANEL_EVENTS_EXPORT_EP+"?from_date=%v&to_date=%v", eventsDate, eventsDate)
+			req, err := http.NewRequest("GET", endpoint, nil)
+			if err != nil {
+				log.Fatal(err)
+				select {
+				case <-done:
+					return
+				default:
+					done <- struct{}{}
+					return
+				}
+			}
+			req.Header.Add("Authorization", "Basic "+encodedSecret)
+			resp, err := client.Do(req)
+			if err == nil && resp.StatusCode < 300 {
+				scanner := bufio.NewScanner(resp.Body)
+				scanner.Split(ScanCRLF)
+				for scanner.Scan() {
+					s := scanner.Text()
+					s = strings.Trim(s, " \n \r")
+					info := &mixpanelEventRecordInfo{}
+					err = json.Unmarshal([]byte(s), info)
+					if err != nil {
+						log.Printf("Error parsing event record %v. Skipping", s)
+					} else {
+						select {
+						case <-done:
+							return
+						case mixpanelRecordStream <- info:
+						}
+					}
+				}
+				if err := scanner.Err(); err != nil {
+					log.Fatal(err)
+					select {
+					case <-done:
+						return
+					default:
+						done <- struct{}{}
+						return
+					}
+				}
+
+				resp.Body.Close()
+
+				if eventsDate == endDate {
+					//reached end date
+					break
+				}
+				//continue with next date
+				t, _ := time.Parse("2006-01-02", eventsDate)
+				t = t.AddDate(0, 0, 1)
+				eventsDate = t.Format("2006-01-02")
+				continue
+			}
+			if err != nil {
+				log.Println("Error while fetching events data from Mixpanel: ", err)
+				log.Printf("retrying after 20 seconds for date: %v", eventsDate)
+			} else {
+				body, _ := ioutil.ReadAll(resp.Body)
+				log.Println("response body: ", string(body))
+				log.Printf("retrying after 20 seconds for date: %v", eventsDate)
+			}
+			if resp != nil {
+				resp.Body.Close()
+			}
+			time.Sleep(20 * time.Second)
+		}
 	}()
 	return mixpanelRecordStream
 }
