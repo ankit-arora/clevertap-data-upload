@@ -136,7 +136,7 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan mixpanelRecor
 	mixpanelRecordStream := make(chan mixpanelRecordInfo)
 	go func() {
 		defer close(mixpanelRecordStream)
-		client := &http.Client{}
+		client := &http.Client{Timeout: time.Minute * 1}
 		sessionId := ""
 		page := "0"
 		pageSize := 0
