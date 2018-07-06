@@ -61,7 +61,7 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 		if err == nil && resp.StatusCode < 500 {
 			body, _ := ioutil.ReadAll(resp.Body)
 			responseText := string(body)
-			log.Println("response body: ", responseText, resp.StatusCode)
+			log.Printf("response body: %v , status code: %v", responseText, resp.StatusCode)
 			//{ "status" : "success" , "processed" : 2 , "unprocessed" : [ ]}
 			if resp.StatusCode == 400 {
 				fmt.Println("status 400 for:")

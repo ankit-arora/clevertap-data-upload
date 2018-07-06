@@ -19,6 +19,8 @@ import (
 
 	"bufio"
 
+	"reflect"
+
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
@@ -39,6 +41,7 @@ var PROPERTIES_MAP = map[string]string{
 	"facebook_id":   "fbId",
 	"timezone":      "Timezone",
 	"date_of_birth": "Birthday",
+	"phone":         "Phone",
 }
 
 type uploadProfilesFromMixpanel struct {
@@ -120,13 +123,22 @@ func (p *mixpanelProfileRecordInfo) convertToCT() ([]interface{}, error) {
 					k = k[1:]
 				}
 
-				if nK, ok := PROPERTIES_MAP["k"]; ok {
+				if nK, ok := PROPERTIES_MAP[k]; ok {
 					k = nK
 				}
+
+				//Date Of Birth
+				//Email
+				//Phone
+
+				if k == "Email" || k == "Date Of Birth" || k == "Phone" {
+					continue
+				}
+
 				propertyData[k] = v
-				record["profileData"] = propertyData
 				propsCount++
 			}
+			record["profileData"] = propertyData
 			records = append(records, record)
 		} else {
 			log.Printf("Identity not found for record. Skipping: %v", r)
@@ -254,34 +266,107 @@ type uploadEventsFromMixpanel struct {
 func (u *uploadEventsFromMixpanel) Execute() {
 	log.Println("started")
 	//ct batch size of 100 for MP
-	//ctBatchSize = 100
-	//var wg sync.WaitGroup
+	ctBatchSize = 100
+	var wg sync.WaitGroup
 	done := make(chan interface{})
-	//batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
-	//wg.Wait()
-
-	count := 0
-
-	recordStream := mixpanelEventRecordsGenerator(done)
-
-	for info := range recordStream {
-		info.print()
-		count++
-	}
-
-	log.Println("\n\n\nrecord count: ", count)
-
+	batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelEventRecordsGenerator(done)), &wg)
+	wg.Wait()
 	log.Println("done")
 }
 
 type mixpanelEventRecordInfo struct {
-	Event      string                 `json:"event"`
-	Properties map[string]interface{} `json:"properties"`
+	Event      string                 `json:"event,omitempty"`
+	Properties map[string]interface{} `json:"properties,omitempty"`
 }
 
 func (e *mixpanelEventRecordInfo) convertToCT() ([]interface{}, error) {
 	records := make([]interface{}, 0)
-
+	eventName := e.Event
+	if eventName == "" {
+		log.Printf("Event name missing for record: %v . Skipping", e)
+		return records, nil
+	}
+	identity, ok := e.Properties["distinct_id"]
+	if !ok {
+		log.Printf("Identity missing for record: %v . Skipping", e)
+		return records, nil
+	}
+	ts, ok := e.Properties["time"]
+	if !ok {
+		log.Printf("Time stamp missing for record: %v . Skipping", e)
+		return records, nil
+	}
+	isEventRestricted := false
+	for _, r := range RESTRICTED_EVENTS {
+		if eventName == r {
+			isEventRestricted = true
+			break
+		}
+	}
+	if isEventRestricted {
+		eventName = "_" + eventName
+	}
+	record := make(map[string]interface{})
+	record["identity"] = identity
+	record["type"] = "event"
+	record["ts"] = ts
+	record["evtName"] = eventName
+	propertyData := make(map[string]interface{})
+	propsCount := 0
+	for k, v := range e.Properties {
+		if propsCount > MAX_PROPS_COUNT {
+			break
+		}
+		if k == "distinct_id" || k == "time" {
+			continue
+		}
+		if strings.HasPrefix(k, "$") {
+			continue
+		}
+		if v == nil {
+			continue
+		}
+		isNested := false
+		valueType := reflect.TypeOf(v)
+		switch valueType.Kind() {
+		case reflect.Slice:
+			isNested = true
+			break
+		case reflect.Array:
+			isNested = true
+			break
+		default:
+		}
+		vTemp := ""
+		if isNested {
+			vArr := v.([]interface{})
+			for index, vS := range vArr {
+				vsT := reflect.TypeOf(vS)
+				if vsT != nil {
+					if vsT.Kind() == reflect.String || vsT.Kind() == reflect.Float64 {
+						if vsT.Kind() == reflect.String {
+							vTemp += vS.(string)
+							if index != len(vArr)-1 {
+								vTemp += ","
+							}
+						} else {
+							vTemp += fmt.Sprintf("%v", vS)
+							if index != len(vArr)-1 {
+								vTemp += ","
+							}
+						}
+					}
+				}
+			}
+			propertyData[k] = vTemp
+			//log.Printf("nested key: %v , nested value: %v , vArr: %v", k, vTemp, vArr)
+		} else {
+			propertyData[k] = v
+		}
+		propsCount++
+	}
+	record["evtData"] = propertyData
+	records = append(records, record)
 	return records, nil
 }
 
