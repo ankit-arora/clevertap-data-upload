@@ -9,6 +9,7 @@ import (
 var CSVFilePath *string
 var MixpanelSecret *string
 var StartDate *string
+var EndDate *string
 var AccountID *string
 var AccountPasscode *string
 var EvtName *string
@@ -22,6 +23,8 @@ func Init() bool {
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
 	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
 	StartDate = flag.String("startDate", "", "Start date for exporting events from Mixpanel "+
+		"<yyyy-mm--dd>")
+	EndDate = flag.String("endDate", "", "End date for exporting events from Mixpanel "+
 		"<yyyy-mm--dd>")
 	AccountID = flag.String("id", "", "CleverTap Account ID")
 	AccountPasscode = flag.String("p", "", "CleverTap Account Passcode")
@@ -56,6 +59,14 @@ func Init() bool {
 		_, err := time.Parse("2006-01-02", *StartDate)
 		if err != nil {
 			log.Println("Start date is not in correct format. Format: <yyyy-mm-dd>")
+			return false
+		}
+	}
+	if *MixpanelSecret != "" && *Type == "event" && *EndDate != "" {
+		//check end date format
+		_, err := time.Parse("2006-01-02", *EndDate)
+		if err != nil {
+			log.Println("End date is not in correct format. Format: <yyyy-mm-dd>")
 			return false
 		}
 	}

@@ -131,9 +131,9 @@ func (p *mixpanelProfileRecordInfo) convertToCT() ([]interface{}, error) {
 				//Email
 				//Phone
 
-				//if k == "Email" || k == "Date Of Birth" || k == "Phone" {
-				//	continue
-				//}
+				if k == "Email" || k == "Date Of Birth" || k == "Phone" {
+					continue
+				}
 
 				propertyData[k] = v
 				propsCount++
@@ -380,7 +380,10 @@ func mixpanelEventRecordsGenerator(done chan interface{}) <-chan mixpanelRecordI
 		defer close(mixpanelRecordStream)
 		client := &http.Client{Timeout: time.Minute * 240}
 		eventsDate := *globals.StartDate
-		endDate := time.Now().Local().Format("2006-01-02")
+		endDate := *globals.EndDate
+		if endDate == "" {
+			endDate = time.Now().Local().Format("2006-01-02")
+		}
 		log.Printf("Fetching events with start date: %v and end date: %v ", eventsDate, endDate)
 		encodedSecret := base64.StdEncoding.EncodeToString([]byte(*globals.MixpanelSecret))
 		for {
