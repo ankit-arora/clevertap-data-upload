@@ -131,9 +131,9 @@ func (p *mixpanelProfileRecordInfo) convertToCT() ([]interface{}, error) {
 				//Email
 				//Phone
 
-				if k == "Email" || k == "Date Of Birth" || k == "Phone" {
-					continue
-				}
+				//if k == "Email" || k == "Date Of Birth" || k == "Phone" {
+				//	continue
+				//}
 
 				propertyData[k] = v
 				propsCount++
