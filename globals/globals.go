@@ -70,6 +70,15 @@ func Init() bool {
 			return false
 		}
 	}
+	if *EndDate != "" && *StartDate != "" {
+		//start date should be less than or equal to end date
+		s, _ := time.Parse("2006-01-02", *StartDate)
+		e, _ := time.Parse("2006-01-02", *EndDate)
+		if s.After(e) {
+			log.Println("Start date cannot be after End date")
+			return false
+		}
+	}
 	if *Region != "eu" && *Region != "in" {
 		log.Println("Region can be either eu or in")
 		return false
