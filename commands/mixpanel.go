@@ -56,6 +56,7 @@ func (u *uploadProfilesFromMixpanel) Execute() {
 	batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
 	wg.Wait()
 	log.Println("done")
+	log.Printf("Profiles ctProcessed: %v , ctUnprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
 }
 
 type mixpanelRecordInfo interface {
@@ -272,6 +273,12 @@ func (u *uploadEventsFromMixpanel) Execute() {
 	batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelEventRecordsGenerator(done)), &wg)
 	wg.Wait()
 	log.Println("done")
+	log.Println("---------------------Summary---------------------")
+	log.Printf("Events ctProcessed: %v , ctUnprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+	log.Println("Mixpanel Events Parse Error Responses:")
+	for _, parseErrorResponse := range Summary.mpParseErrorResponses {
+		log.Println(parseErrorResponse)
+	}
 }
 
 type mixpanelEventRecordInfo struct {
@@ -412,7 +419,14 @@ func mixpanelEventRecordsGenerator(done chan interface{}) <-chan mixpanelRecordI
 					err = json.Unmarshal([]byte(s), info)
 					if err != nil {
 						log.Printf("Error parsing event record %v. Skipping", s)
+						Summary.mpParseErrorResponses = append(Summary.mpParseErrorResponses, s)
 					} else {
+						if ts, ok := info.Properties["time"]; ok {
+							if *globals.StartTs > 0 && ts.(float64) < *globals.StartTs {
+								//log.Printf("start ts: %v , ts: %v", *globals.StartTs, ts.(float64))
+								continue
+							}
+						}
 						select {
 						case <-done:
 							return

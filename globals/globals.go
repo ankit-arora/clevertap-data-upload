@@ -16,6 +16,7 @@ var EvtName *string
 var Type *string
 var Region *string
 var DryRun *bool
+var StartTs *float64
 
 //var AutoConvert *bool
 
@@ -26,6 +27,7 @@ func Init() bool {
 		"<yyyy-mm--dd>")
 	EndDate = flag.String("endDate", "", "End date for exporting events from Mixpanel "+
 		"<yyyy-mm--dd>")
+	StartTs = flag.Float64("startTs", 0, "Start timestamp for events upload")
 	AccountID = flag.String("id", "", "CleverTap Account ID")
 	AccountPasscode = flag.String("p", "", "CleverTap Account Passcode")
 	EvtName = flag.String("evtName", "", "Event name")

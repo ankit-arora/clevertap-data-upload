@@ -12,6 +12,8 @@ import (
 
 	"fmt"
 
+	"sync"
+
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
@@ -33,6 +35,29 @@ func Get() Command {
 	}
 
 	return nil
+}
+
+//{
+//"status": "success",
+//"ctProcessed": 1,
+//"ctUnprocessed": []
+//}
+
+type CTResponse struct {
+	Status      string        `json:"status,omitempty"`
+	Processed   int64         `json:"ctProcessed,omitempty"`
+	Unprocessed []interface{} `json:"ctUnprocessed,omitempty"`
+}
+
+var Summary = struct {
+	sync.Mutex
+	ctProcessed           int64
+	ctUnprocessed         int64
+	mpParseErrorResponses []string
+}{
+	ctProcessed:           0,
+	ctUnprocessed:         0,
+	mpParseErrorResponses: make([]string, 0),
 }
 
 func sendData(payload map[string]interface{}, endpoint string) (string, error) {
@@ -62,10 +87,22 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 			body, _ := ioutil.ReadAll(resp.Body)
 			responseText := string(body)
 			log.Printf("response body: %v , status code: %v", responseText, resp.StatusCode)
-			//{ "status" : "success" , "processed" : 2 , "unprocessed" : [ ]}
-			if resp.StatusCode == 400 {
+			//{ "status" : "success" , "ctProcessed" : 2 , "ctUnprocessed" : [ ]}
+			if resp.StatusCode == http.StatusBadRequest {
 				fmt.Println("status 400 for:")
 				json.NewEncoder(os.Stdout).Encode(payload)
+			}
+			if resp.StatusCode == http.StatusOK {
+				respFromCT := &CTResponse{}
+				ctRespError := json.Unmarshal(body, respFromCT)
+				if ctRespError == nil {
+					processed := respFromCT.Processed
+					unprocessed := int64(ctBatchSize) - processed
+					Summary.Lock()
+					Summary.ctProcessed += processed
+					Summary.ctUnprocessed += unprocessed
+					Summary.Unlock()
+				}
 			}
 			resp.Body.Close()
 			return responseText, nil
