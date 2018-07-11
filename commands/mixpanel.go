@@ -21,6 +21,8 @@ import (
 
 	"reflect"
 
+	"os"
+
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
@@ -56,7 +58,7 @@ func (u *uploadProfilesFromMixpanel) Execute() {
 	batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
 	wg.Wait()
 	log.Println("done")
-	log.Printf("Profiles ctProcessed: %v , ctUnprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+	log.Printf("Profiles Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
 }
 
 type mixpanelRecordInfo interface {
@@ -270,15 +272,22 @@ func (u *uploadEventsFromMixpanel) Execute() {
 	ctBatchSize = 100
 	var wg sync.WaitGroup
 	done := make(chan interface{})
-	batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelEventRecordsGenerator(done)), &wg)
+	if globals.MPEventsFilePaths != nil && len(globals.MPEventsFilePaths) > 0 {
+		batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelEventRecordsFromFilesGenerator(done)), &wg)
+	} else {
+		batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelEventRecordsGenerator(done)), &wg)
+	}
 	wg.Wait()
 	log.Println("done")
 	log.Println("---------------------Summary---------------------")
-	log.Printf("Events ctProcessed: %v , ctUnprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
-	log.Println("Mixpanel Events Parse Error Responses:")
-	for _, parseErrorResponse := range Summary.mpParseErrorResponses {
-		log.Println(parseErrorResponse)
+	log.Printf("Events Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+	if len(Summary.mpParseErrorResponses) > 0 {
+		log.Println("Mixpanel Events Parse Error Responses:")
+		for _, parseErrorResponse := range Summary.mpParseErrorResponses {
+			log.Println(parseErrorResponse)
+		}
 	}
+
 }
 
 type mixpanelEventRecordInfo struct {
@@ -469,6 +478,67 @@ func mixpanelEventRecordsGenerator(done chan interface{}) <-chan mixpanelRecordI
 				resp.Body.Close()
 			}
 			time.Sleep(20 * time.Second)
+		}
+	}()
+	return mixpanelRecordStream
+}
+
+func mixpanelEventRecordsFromFilesGenerator(done chan interface{}) <-chan mixpanelRecordInfo {
+	mixpanelRecordStream := make(chan mixpanelRecordInfo)
+	go func() {
+		defer close(mixpanelRecordStream)
+		for _, mpEventsFilePath := range globals.MPEventsFilePaths {
+			log.Printf("Fetching events data from Mixpanel events file: %v", mpEventsFilePath)
+			file, err := os.Open(mpEventsFilePath)
+			if err != nil {
+				log.Fatal(err)
+				select {
+				case <-done:
+					return
+				default:
+					done <- struct{}{}
+					return
+				}
+			}
+			scanner := bufio.NewScanner(file)
+			scanner.Split(ScanCRLF)
+			for scanner.Scan() {
+				s := scanner.Text()
+				s = strings.Trim(s, " \n \r")
+				info := &mixpanelEventRecordInfo{}
+				err = json.Unmarshal([]byte(s), info)
+				if err != nil {
+					log.Printf("Error parsing event record %v. Skipping", s)
+					Summary.mpParseErrorResponses = append(Summary.mpParseErrorResponses, s)
+				} else {
+					if ts, ok := info.Properties["time"]; ok {
+						if *globals.StartTs > 0 && ts.(float64) < *globals.StartTs {
+							//log.Printf("start ts: %v , ts: %v", *globals.StartTs, ts.(float64))
+							continue
+						}
+					}
+					select {
+					case <-done:
+						file.Close()
+						return
+					case mixpanelRecordStream <- info:
+					}
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				log.Fatal(err)
+				select {
+				case <-done:
+					file.Close()
+					return
+				default:
+					done <- struct{}{}
+					file.Close()
+					return
+				}
+			}
+
+			file.Close()
 		}
 	}()
 	return mixpanelRecordStream

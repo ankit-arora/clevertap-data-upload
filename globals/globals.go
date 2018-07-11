@@ -2,6 +2,7 @@ package globals
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"time"
 )
@@ -20,7 +21,21 @@ var StartTs *float64
 
 //var AutoConvert *bool
 
+type arrayFlags []string
+
+func (i *arrayFlags) String() string {
+	return fmt.Sprintf("%v", *i)
+}
+
+func (i *arrayFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
+var MPEventsFilePaths arrayFlags
+
 func Init() bool {
+	flag.Var(&MPEventsFilePaths, "mixpanelEventsFile", "Absolute path to the MixPanel events file")
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
 	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
 	StartDate = flag.String("startDate", "", "Start date for exporting events from Mixpanel "+
@@ -36,8 +51,8 @@ func Init() bool {
 	DryRun = flag.Bool("dryrun", false, "Do a dry run, process records but do not upload")
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
-	if (*CSVFilePath == "" && *MixpanelSecret == "") || *AccountID == "" || *AccountPasscode == "" {
-		log.Println("Mixpanel secret or CSV file path, account id, and passcode are mandatory")
+	if (*CSVFilePath == "" && *MixpanelSecret == "" && MPEventsFilePaths == nil) || *AccountID == "" || *AccountPasscode == "" {
+		log.Println("Mixpanel secret or CSV file path or Mixpanel events file path, account id, and passcode are mandatory")
 		return false
 	}
 	if *CSVFilePath != "" && *MixpanelSecret != "" {
@@ -80,6 +95,10 @@ func Init() bool {
 			log.Println("Start date cannot be after End date")
 			return false
 		}
+	}
+	if MPEventsFilePaths != nil && len(MPEventsFilePaths) > 0 && *Type != "event" {
+		log.Println("Mixpanel events file path is supported only with events")
+		return false
 	}
 	if *Region != "eu" && *Region != "in" {
 		log.Println("Region can be either eu or in")

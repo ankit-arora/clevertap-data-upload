@@ -34,6 +34,10 @@ func Get() Command {
 		return &uploadEventsFromMixpanel{}
 	}
 
+	if globals.MPEventsFilePaths != nil && len(globals.MPEventsFilePaths) > 0 && *globals.Type == "event" {
+		return &uploadEventsFromMixpanel{}
+	}
+
 	return nil
 }
 
@@ -45,8 +49,8 @@ func Get() Command {
 
 type CTResponse struct {
 	Status      string        `json:"status,omitempty"`
-	Processed   int64         `json:"ctProcessed,omitempty"`
-	Unprocessed []interface{} `json:"ctUnprocessed,omitempty"`
+	Processed   int           `json:"processed,omitempty"`
+	Unprocessed []interface{} `json:"unprocessed,omitempty"`
 }
 
 var Summary = struct {
@@ -97,10 +101,10 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 				ctRespError := json.Unmarshal(body, respFromCT)
 				if ctRespError == nil {
 					processed := respFromCT.Processed
-					unprocessed := int64(ctBatchSize) - processed
+					unprocessed := len(respFromCT.Unprocessed)
 					Summary.Lock()
-					Summary.ctProcessed += processed
-					Summary.ctUnprocessed += unprocessed
+					Summary.ctProcessed += int64(processed)
+					Summary.ctUnprocessed += int64(unprocessed)
 					Summary.Unlock()
 				}
 			}
