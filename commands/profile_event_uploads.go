@@ -169,6 +169,10 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 			continue
 		}
 
+		if *globals.Type == "profile" && ep == "" {
+			continue
+		}
+
 		propertyData[key] = ep
 	}
 
