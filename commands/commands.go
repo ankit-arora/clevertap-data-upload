@@ -51,6 +51,7 @@ type CTResponse struct {
 	Status      string        `json:"status,omitempty"`
 	Processed   int           `json:"processed,omitempty"`
 	Unprocessed []interface{} `json:"unprocessed,omitempty"`
+	Error       string        `json:"error,omitempty"`
 }
 
 var Summary = struct {
@@ -87,8 +88,22 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 		req.Header.Add("X-CleverTap-Passcode", *globals.AccountPasscode)
 
 		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode < 500 {
-			body, _ := ioutil.ReadAll(resp.Body)
+		retry := false
+		var body []byte
+		if err == nil {
+			body, _ = ioutil.ReadAll(resp.Body)
+		}
+
+		if resp.StatusCode == http.StatusBadRequest && err == nil && *globals.Type == "profile" {
+			//{ "status" : "fail" , "error" : "Malformed request" , "code" : 400}
+			respFromCT := &CTResponse{}
+			ctRespError := json.Unmarshal(body, respFromCT)
+			if ctRespError == nil && respFromCT.Error == "Malformed request" {
+				retry = true
+			}
+		}
+
+		if err == nil && resp.StatusCode < 500 && !retry {
 			responseText := string(body)
 			log.Printf("response body: %v , status code: %v", responseText, resp.StatusCode)
 			//{ "status" : "success" , "ctProcessed" : 2 , "ctUnprocessed" : [ ]}
@@ -116,7 +131,7 @@ func sendData(payload map[string]interface{}, endpoint string) (string, error) {
 			log.Println("Error", err)
 			log.Println("retrying after 20 seconds")
 		} else {
-			body, _ := ioutil.ReadAll(resp.Body)
+			//body, _ := ioutil.ReadAll(resp.Body)
 			log.Println("response body: ", string(body))
 			log.Println("response body: ", "retrying for payload after 20 seconds: ")
 			json.NewEncoder(os.Stdout).Encode(payload)

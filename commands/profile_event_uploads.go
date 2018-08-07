@@ -35,6 +35,13 @@ func (u *uploadEventsProfilesFromCSVCommand) Execute() {
 	wg.Wait()
 
 	log.Println("done")
+
+	log.Println("---------------------Summary---------------------")
+	if *globals.Type == "profile" {
+		log.Printf("Profiles Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+	} else {
+		log.Printf("Events Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+	}
 }
 
 func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *sync.WaitGroup) {
@@ -208,8 +215,10 @@ func processCSVLineForUpload(done chan interface{}, rowStream <-chan csvLineInfo
 						return
 					}
 				}
-				log.Println("Error in processing record")
-				log.Println("Skipping line number: ", i+1, " : ", l)
+				if l != "" {
+					log.Printf("Error in processing record")
+					log.Printf("Skipping line number: %v : %v", i+1, l)
+				}
 				continue
 			}
 			sLine := sLineArr[0]
