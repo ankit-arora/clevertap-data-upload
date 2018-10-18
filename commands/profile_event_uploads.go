@@ -180,7 +180,28 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 			continue
 		}
 
-		propertyData[key] = ep
+		if globals.Schema != nil {
+			dataType, ok := globals.Schema[key]
+			if ok {
+				dataType = strings.ToLower(dataType)
+				if dataType == "float" {
+					v, err := strconv.ParseFloat(ep, 64)
+					if err == nil {
+						propertyData[key] = v
+					}
+				}
+				if dataType == "integer" {
+					v, err := strconv.ParseInt(ep, 10, 64)
+					if err == nil {
+						propertyData[key] = v
+					}
+				}
+			}
+		}
+		_, ok := propertyData[key]
+		if !ok {
+			propertyData[key] = ep
+		}
 	}
 
 	if *globals.Type == "event" {

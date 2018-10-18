@@ -1,13 +1,16 @@
 package globals
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"time"
 )
 
 var CSVFilePath *string
+var SchemaFilePath *string
 var MixpanelSecret *string
 var StartDate *string
 var EndDate *string
@@ -37,6 +40,7 @@ var MPEventsFilePaths arrayFlags
 func Init() bool {
 	flag.Var(&MPEventsFilePaths, "mixpanelEventsFile", "Absolute path to the MixPanel events file")
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
+	SchemaFilePath = flag.String("schema", "", "Absolute path to the schema file")
 	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
 	StartDate = flag.String("startDate", "", "Start date for exporting events from Mixpanel "+
 		"<yyyy-mm--dd>")
@@ -102,6 +106,25 @@ func Init() bool {
 	}
 	if *Region != "eu" && *Region != "in" {
 		log.Println("Region can be either eu or in")
+		return false
+	}
+	return true
+}
+
+var Schema map[string]string
+
+func ParseSchema(file *os.File) bool {
+	/**
+	{
+		"key": "Float",
+		"key 1": "Integer",
+		"key 2": "Number"
+	}
+	*/
+	err := json.NewDecoder(file).Decode(&Schema)
+	if err != nil {
+		log.Println(err)
+		log.Println("Unable to parse schema file")
 		return false
 	}
 	return true
