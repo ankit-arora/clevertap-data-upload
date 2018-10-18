@@ -196,6 +196,12 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 						propertyData[key] = v
 					}
 				}
+				if dataType == "boolean" {
+					v, err := strconv.ParseBool(strings.ToLower(ep))
+					if err == nil {
+						propertyData[key] = v
+					}
+				}
 			}
 		}
 		_, ok := propertyData[key]

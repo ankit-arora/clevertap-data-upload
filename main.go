@@ -16,7 +16,7 @@ func main() {
 		//read schema file
 		file, err := os.Open(*globals.SchemaFilePath)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 			return
 		}
 		if !globals.ParseSchema(file) {
