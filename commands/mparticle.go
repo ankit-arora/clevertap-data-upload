@@ -1,0 +1,336 @@
+package commands
+
+import (
+	"bufio"
+	"encoding/json"
+	"io"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/ankit-arora/clevertap-data-upload/globals"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/aws/signer/v4"
+	"github.com/aws/aws-sdk-go/service/s3"
+)
+
+type uploadEventsFromMParticle struct {
+}
+
+func (u *uploadEventsFromMParticle) Execute() {
+	log.Println("started")
+	//ct batch size of 100 for MP
+	ctBatchSize = 100
+	var wg sync.WaitGroup
+	done := make(chan interface{})
+	batchAndSend(done, processRecordForUpload(done, mparticleEventRecordsGenerator(done,
+		mparticleAllS3ObjectsGenerator(done))), &wg)
+
+	wg.Wait()
+	log.Println("done")
+	log.Println("---------------------Summary---------------------")
+	log.Printf("Events Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+	if len(Summary.mpParseErrorResponses) > 0 {
+		log.Println("Mparticle Events Parse Error Responses:")
+		for _, parseErrorResponse := range Summary.mpParseErrorResponses {
+			log.Println(parseErrorResponse)
+		}
+	}
+}
+
+func buildRequestWithBodyReader(serviceName, region, bucketName, objectName string, body io.Reader) (*http.Request, io.ReadSeeker, error) {
+	var bodyLen int
+
+	type lenner interface {
+		Len() int
+	}
+	if lr, ok := body.(lenner); ok {
+		bodyLen = lr.Len()
+	}
+	endpoint := "https://" + bucketName + "." + serviceName + "." + region + ".amazonaws.com/" + objectName
+	req, err := http.NewRequest("GET", endpoint, body)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-amz-json-1.0")
+
+	if bodyLen > 0 {
+		req.Header.Set("Content-Length", strconv.Itoa(bodyLen))
+	}
+
+	var seeker io.ReadSeeker
+	if sr, ok := body.(io.ReadSeeker); ok {
+		seeker = sr
+	} else {
+		seeker = aws.ReadSeekCloser(body)
+	}
+
+	return req, seeker, nil
+}
+
+func buildRequest(serviceName, region, bucketName, objectName, body string) (*http.Request, io.ReadSeeker, error) {
+	reader := strings.NewReader(body)
+	return buildRequestWithBodyReader(serviceName, region, bucketName, objectName, reader)
+}
+
+/*
+{
+"events" :
+[
+{
+"data" : {},
+"event_type" : "custom_event"
+}
+],
+"device_info" : {},
+"user_attributes" : {},
+"deleted_user_attributes" : [],
+"user_identities" : {},
+"application_info" : {},
+"schema_version": 2,
+"environment" : "production",
+"ip" : "127.0.0.1"
+}
+*/
+
+type MparticleEventData struct {
+	Data      map[string]interface{} `json:"data,omitempty"`
+	EventType string                 `json:"event_type,omitempty"`
+}
+
+type mparticleEventRecordInfo struct {
+	Events                []MparticleEventData   `json:"events,omitempty"`
+	DeviceInfo            map[string]interface{} `json:"device_info,omitempty"`
+	UserAttributes        map[string]interface{} `json:"user_attributes,omitempty"`
+	DeletedUserAttributes []interface{}          `json:"deleted_user_attributes,omitempty"`
+	UserIdentities        map[string]interface{} `json:"user_identities,omitempty"`
+	ApplicationInfo       map[string]interface{} `json:"application_info,omitempty"`
+	SchemaVersion         float64                `json:"schema_version,omitempty"`
+	Environment           string                 `json:"environment,omitempty"`
+	Ip                    string                 `json:"ip,omitempty"`
+}
+
+func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
+	records := make([]interface{}, 0)
+	for _, eventFromMParticle := range info.Events {
+		eventData := eventFromMParticle.Data
+		eventName := eventData["event_name"].(string)
+		if eventName == "" {
+			log.Printf("Event name missing for record: %v . Skipping", info)
+			continue
+		}
+		record := make(map[string]interface{})
+		isEventRestricted := false
+		for _, r := range RESTRICTED_EVENTS {
+			if eventName == r {
+				isEventRestricted = true
+				break
+			}
+		}
+		if isEventRestricted {
+			eventName = "_" + eventName
+		}
+		record["evtName"] = eventName
+		tsInterface, ok := eventData["timestamp_unixtime_ms"]
+		if !ok {
+			log.Printf("Time stamp is missing for record: %v . Skipping", info)
+			continue
+		}
+		ts, err := strconv.ParseInt(tsInterface.(string), 10, 64)
+		if err != nil {
+			log.Printf("Time stamp is in wrong format for record: %v . Skipping", info)
+			continue
+		}
+		record["ts"] = ts / 1000
+
+		customAttributes := eventData["custom_attributes"].(map[string]interface{})
+		userId, ok := customAttributes["user_id"]
+
+		if ok && userId.(string) != "-1" {
+			//send userId as identity
+			identity := userId.(string)
+			record["identity"] = identity
+		} else {
+			//generate objectId from advertising id
+			androidAdId, ok := info.DeviceInfo["android_advertising_id"]
+			if ok {
+				record["objectId"] = "__g" + strings.Replace(androidAdId.(string), "-", "", -1)
+			} else {
+				iosAdId, ok := info.DeviceInfo["ios_advertising_id"]
+				if ok {
+					record["objectId"] = "-g" + iosAdId.(string)
+				} else {
+					log.Printf("Both user_id and advertising ids are missing for record: %v . Skipping", eventFromMParticle)
+					continue
+				}
+			}
+
+		}
+
+		record["evtData"] = customAttributes
+		record["type"] = "event"
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
+func (e *mparticleEventRecordInfo) print() {
+	//fmt.Printf("\nresponse: %v", e.response)
+}
+
+func mparticleAllS3ObjectsGenerator(done chan interface{}) <-chan []*s3.Object {
+	mparticleObjectsStream := make(chan []*s3.Object)
+	go func() {
+		defer close(mparticleObjectsStream)
+		creds := credentials.NewStaticCredentials(*globals.AWSAccessKeyID,
+			*globals.AWSSecretAccessKey, "")
+		sess, _ := session.NewSession(&aws.Config{
+			Region:      aws.String(*globals.AWSRegion),
+			Credentials: creds,
+		},
+		)
+
+		svc := s3.New(sess)
+		marker := ""
+		for {
+			//input := &s3.ListObjectsInput{
+			//	Bucket: aws.String(*globals.S3Bucket),
+			//	Marker: aws.String(marker),
+			//	Prefix: aws.String("*/2018-10-02/"),
+			//}
+			input := &s3.ListObjectsInput{
+				Bucket: aws.String(*globals.S3Bucket),
+				Marker: aws.String(marker),
+				Prefix: aws.String(""),
+			}
+			result, err := svc.ListObjects(input)
+
+			if err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					switch aerr.Code() {
+					case s3.ErrCodeNoSuchBucket:
+						log.Println(s3.ErrCodeNoSuchBucket, aerr.Error())
+					default:
+						log.Println(aerr.Error())
+					}
+				} else {
+					// Print the error, cast err to awserr.Error to get the Code and
+					// Message from an error.
+					log.Println(err.Error())
+				}
+
+				select {
+				case <-done:
+					return
+				default:
+					done <- struct{}{}
+					return
+				}
+
+			}
+
+			select {
+			case <-done:
+				return
+			case mparticleObjectsStream <- result.Contents:
+			}
+
+			marker = *result.Contents[len(result.Contents)-1].Key
+
+			//log.Println("marker:", marker)
+
+		}
+	}()
+
+	return mparticleObjectsStream
+}
+
+func mparticleEventRecordsGenerator(done chan interface{}, inputBucketStream <-chan []*s3.Object) <-chan recordInfo {
+	mparticleRecordStream := make(chan recordInfo)
+	go func() {
+		defer close(mparticleRecordStream)
+		creds := credentials.NewStaticCredentials(*globals.AWSAccessKeyID,
+			*globals.AWSSecretAccessKey, "")
+
+		signer := v4.NewSigner(creds)
+
+		for objects := range inputBucketStream {
+			for _, content := range objects {
+				log.Printf("Processing file %v\n", *content.Key)
+				for {
+					req, body, err := buildRequest("s3", *globals.AWSRegion, *globals.S3Bucket,
+						*content.Key, "")
+					if err != nil {
+						log.Fatal(err)
+						select {
+						case <-done:
+							return
+						default:
+							done <- struct{}{}
+							return
+						}
+					}
+					signer.Sign(req, body, "s3", *globals.AWSRegion, time.Now())
+					client := &http.Client{}
+					resp, err := client.Do(req)
+					if err == nil && resp.StatusCode < 300 {
+						scanner := bufio.NewScanner(resp.Body)
+						buf := make([]byte, 0, 64*1024)
+						scanner.Buffer(buf, 5*1024*1024)
+						scanner.Split(ScanCRLF)
+						for scanner.Scan() {
+							s := scanner.Text()
+							s = strings.Trim(s, " \n \r")
+							info := &mparticleEventRecordInfo{}
+							err = json.Unmarshal([]byte(s), info)
+							//fmt.Printf("\nline: %v\n", s)
+							//customAttributes := info.Events[0].Data["custom_attributes"].(map[string]interface{})
+							//fmt.Println("user id: ", customAttributes["user_id"])
+							select {
+							case <-done:
+								return
+							case mparticleRecordStream <- info:
+							}
+						}
+						if err := scanner.Err(); err != nil {
+							log.Fatal(err)
+							select {
+							case <-done:
+								return
+							default:
+								done <- struct{}{}
+								return
+							}
+						}
+
+						resp.Body.Close()
+
+						break
+
+					}
+					if err != nil {
+						log.Println("Error while fetching events data from Mparticle ", err)
+						log.Printf("retrying after 20 seconds for file: %v", *content.Key)
+					} else {
+						body, _ := ioutil.ReadAll(resp.Body)
+						log.Println("response body: ", string(body))
+						log.Printf("retrying after 20 seconds for file: %v", *content.Key)
+					}
+					if resp != nil {
+						resp.Body.Close()
+					}
+					time.Sleep(20 * time.Second)
+				}
+			}
+		}
+	}()
+	return mparticleRecordStream
+}

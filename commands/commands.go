@@ -38,6 +38,10 @@ func Get() Command {
 		return &uploadEventsFromMixpanel{}
 	}
 
+	if *globals.ImportService == "mparticle" {
+		return &uploadEventsFromMParticle{}
+	}
+
 	return nil
 }
 

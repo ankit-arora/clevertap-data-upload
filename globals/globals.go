@@ -12,6 +12,11 @@ import (
 var CSVFilePath *string
 var SchemaFilePath *string
 var MixpanelSecret *string
+var ImportService *string
+var AWSSecretAccessKey *string
+var AWSAccessKeyID *string
+var AWSRegion *string
+var S3Bucket *string
 var StartDate *string
 var EndDate *string
 var AccountID *string
@@ -42,10 +47,15 @@ func Init() bool {
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
 	SchemaFilePath = flag.String("schema", "", "Absolute path to the schema file")
 	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
-	StartDate = flag.String("startDate", "", "Start date for exporting events from Mixpanel "+
-		"<yyyy-mm--dd>")
-	EndDate = flag.String("endDate", "", "End date for exporting events from Mixpanel "+
-		"<yyyy-mm--dd>")
+	ImportService = flag.String("importService", "", "Service you want to import data from")
+	AWSAccessKeyID = flag.String("awsAccessKeyID", "", "AWS access key id")
+	AWSSecretAccessKey = flag.String("awsSecretAccessKey", "", "AWS secret access key")
+	AWSRegion = flag.String("awsRegion", "", "AWS Region")
+	S3Bucket = flag.String("s3Bucket", "", "S3 bucket")
+	StartDate = flag.String("startDate", "", "Start date for exporting events "+
+		"<yyyy-mm-dd>")
+	EndDate = flag.String("endDate", "", "End date for exporting events "+
+		"<yyyy-mm-dd>")
 	StartTs = flag.Float64("startTs", 0, "Start timestamp for events upload")
 	AccountID = flag.String("id", "", "CleverTap Account ID")
 	AccountPasscode = flag.String("p", "", "CleverTap Account Passcode")
@@ -55,8 +65,8 @@ func Init() bool {
 	DryRun = flag.Bool("dryrun", false, "Do a dry run, process records but do not upload")
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
-	if (*CSVFilePath == "" && *MixpanelSecret == "" && MPEventsFilePaths == nil) || *AccountID == "" || *AccountPasscode == "" {
-		log.Println("Mixpanel secret or CSV file path or Mixpanel events file path, account id, and passcode are mandatory")
+	if (*CSVFilePath == "" && *MixpanelSecret == "" && MPEventsFilePaths == nil && *ImportService == "") || *AccountID == "" || *AccountPasscode == "" {
+		log.Println("Mixpanel secret or CSV file path or Mixpanel events file path or Import service option, account id, and passcode are mandatory")
 		return false
 	}
 	if *CSVFilePath != "" && *MixpanelSecret != "" {
@@ -106,6 +116,11 @@ func Init() bool {
 	}
 	if *Region != "eu" && *Region != "in" {
 		log.Println("Region can be either eu or in")
+		return false
+	}
+	if *ImportService == "mparticle" && (*AWSSecretAccessKey == "" || *AWSAccessKeyID == "" || *S3Bucket == "" ||
+		*AWSRegion == "") {
+		log.Println("Importing from mparticle requires AWS access key, secret key, region, and S3 bucket")
 		return false
 	}
 	return true

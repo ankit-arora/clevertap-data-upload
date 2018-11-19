@@ -55,13 +55,13 @@ func (u *uploadProfilesFromMixpanel) Execute() {
 	ctBatchSize = 100
 	var wg sync.WaitGroup
 	done := make(chan interface{})
-	batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
+	batchAndSend(done, processRecordForUpload(done, mixpanelProfileRecordsGenerator(done)), &wg)
 	wg.Wait()
 	log.Println("done")
 	log.Printf("Profiles Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
 }
 
-type mixpanelRecordInfo interface {
+type recordInfo interface {
 	convertToCT() ([]interface{}, error)
 	print()
 }
@@ -155,8 +155,8 @@ func (p *mixpanelProfileRecordInfo) print() {
 	log.Printf("Results size: %v", len(p.Results))
 }
 
-func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan mixpanelRecordInfo {
-	mixpanelRecordStream := make(chan mixpanelRecordInfo)
+func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan recordInfo {
+	mixpanelRecordStream := make(chan recordInfo)
 	go func() {
 		defer close(mixpanelRecordStream)
 		client := &http.Client{Timeout: time.Minute * 1}
@@ -235,14 +235,14 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan mixpanelRecor
 	return mixpanelRecordStream
 }
 
-func processMixpanelRecordForUpload(done chan interface{}, mixpanelRecordStream <-chan mixpanelRecordInfo) <-chan interface{} {
-	recordStream := make(chan interface{})
+func processRecordForUpload(done chan interface{}, inputRecordStream <-chan recordInfo) <-chan interface{} {
+	convertedRecordStream := make(chan interface{})
 	go func() {
-		defer close(recordStream)
-		for mpRecordInfo := range mixpanelRecordStream {
+		defer close(convertedRecordStream)
+		for mpRecordInfo := range inputRecordStream {
 			ctRecords, err := mpRecordInfo.convertToCT()
 			if err != nil {
-				log.Println("Error converting Mixpanel ctRecords to Clevertap", err)
+				log.Println("Error converting ctRecords to Clevertap", err)
 				select {
 				case <-done:
 					return
@@ -255,12 +255,12 @@ func processMixpanelRecordForUpload(done chan interface{}, mixpanelRecordStream 
 				select {
 				case <-done:
 					return
-				case recordStream <- ctRecord:
+				case convertedRecordStream <- ctRecord:
 				}
 			}
 		}
 	}()
-	return recordStream
+	return convertedRecordStream
 }
 
 type uploadEventsFromMixpanel struct {
@@ -273,9 +273,9 @@ func (u *uploadEventsFromMixpanel) Execute() {
 	var wg sync.WaitGroup
 	done := make(chan interface{})
 	if globals.MPEventsFilePaths != nil && len(globals.MPEventsFilePaths) > 0 {
-		batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelEventRecordsFromFilesGenerator(done)), &wg)
+		batchAndSend(done, processRecordForUpload(done, mixpanelEventRecordsFromFilesGenerator(done)), &wg)
 	} else {
-		batchAndSend(done, processMixpanelRecordForUpload(done, mixpanelEventRecordsGenerator(done)), &wg)
+		batchAndSend(done, processRecordForUpload(done, mixpanelEventRecordsGenerator(done)), &wg)
 	}
 	wg.Wait()
 	log.Println("done")
@@ -390,8 +390,8 @@ func (e *mixpanelEventRecordInfo) print() {
 	//fmt.Printf("\nresponse: %v", e.response)
 }
 
-func mixpanelEventRecordsGenerator(done chan interface{}) <-chan mixpanelRecordInfo {
-	mixpanelRecordStream := make(chan mixpanelRecordInfo)
+func mixpanelEventRecordsGenerator(done chan interface{}) <-chan recordInfo {
+	mixpanelRecordStream := make(chan recordInfo)
 	go func() {
 		defer close(mixpanelRecordStream)
 		client := &http.Client{Timeout: time.Minute * 240}
@@ -483,8 +483,8 @@ func mixpanelEventRecordsGenerator(done chan interface{}) <-chan mixpanelRecordI
 	return mixpanelRecordStream
 }
 
-func mixpanelEventRecordsFromFilesGenerator(done chan interface{}) <-chan mixpanelRecordInfo {
-	mixpanelRecordStream := make(chan mixpanelRecordInfo)
+func mixpanelEventRecordsFromFilesGenerator(done chan interface{}) <-chan recordInfo {
+	mixpanelRecordStream := make(chan recordInfo)
 	go func() {
 		defer close(mixpanelRecordStream)
 		for _, mpEventsFilePath := range globals.MPEventsFilePaths {
