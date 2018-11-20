@@ -41,9 +41,11 @@ func (i *arrayFlags) Set(value string) error {
 }
 
 var MPEventsFilePaths arrayFlags
+var FEvents arrayFlags
 
 func Init() bool {
 	flag.Var(&MPEventsFilePaths, "mixpanelEventsFile", "Absolute path to the MixPanel events file")
+	flag.Var(&FEvents, "filterEvent", "Event to be filtered (would not be uploaded)")
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
 	SchemaFilePath = flag.String("schema", "", "Absolute path to the schema file")
 	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
@@ -143,4 +145,13 @@ func ParseSchema(file *os.File) bool {
 		return false
 	}
 	return true
+}
+
+var FilterEventsSet map[string]bool
+
+func InitFilterEventsSet() {
+	FilterEventsSet = make(map[string]bool)
+	for _, v := range FEvents {
+		FilterEventsSet[v] = true
+	}
 }

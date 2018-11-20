@@ -26,5 +26,8 @@ func main() {
 		}
 		file.Close()
 	}
+	if globals.FEvents != nil && len(globals.FEvents) > 0 {
+		globals.InitFilterEventsSet()
+	}
 	commands.Get().Execute()
 }

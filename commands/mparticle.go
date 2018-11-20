@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,6 +127,14 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 			log.Printf("Event name missing for record: %v . Skipping", info)
 			continue
 		}
+		if globals.FilterEventsSet != nil {
+			_, ok := globals.FilterEventsSet[eventName]
+			if ok {
+				//filter event
+				log.Printf("Filtered event: %v.", eventName)
+				continue
+			}
+		}
 		record := make(map[string]interface{})
 		isEventRestricted := false
 		for _, r := range RESTRICTED_EVENTS {
@@ -174,7 +183,59 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 
 		}
 
-		record["evtData"] = customAttributes
+		propData := make(map[string]interface{})
+		for k, v := range customAttributes {
+			propData[k] = v
+			if globals.Schema != nil {
+				dataType, ok := globals.Schema[k]
+				dataType = strings.ToLower(dataType)
+				if ok {
+					valueType := reflect.TypeOf(v)
+					switch valueType.Kind() {
+					case reflect.String:
+						vTemp := v.(string)
+						if dataType == "float" {
+							v, err := strconv.ParseFloat(vTemp, 64)
+							if err == nil {
+								propData[k] = v
+							}
+						}
+						if dataType == "integer" {
+							v, err := strconv.ParseInt(vTemp, 10, 64)
+							if err == nil {
+								propData[k] = v
+							}
+						}
+						if dataType == "boolean" {
+							v, err := strconv.ParseBool(strings.ToLower(vTemp))
+							if err == nil {
+								propData[k] = v
+							}
+						}
+						break
+					case reflect.Float64:
+						vTemp := v.(float64)
+						if dataType == "integer" {
+							propData[k] = int(vTemp)
+						}
+						if dataType == "string" {
+							v := strconv.FormatFloat(vTemp, 'f', -1, 64)
+							propData[k] = v
+						}
+						break
+					case reflect.Bool:
+						vTemp := v.(bool)
+						if dataType == "string" {
+							v := strconv.FormatBool(vTemp)
+							propData[k] = v
+						}
+						break
+					default:
+					}
+				}
+			}
+		}
+		record["evtData"] = propData
 		record["type"] = "event"
 		records = append(records, record)
 	}
