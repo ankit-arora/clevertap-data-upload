@@ -10,8 +10,6 @@ import (
 
 	"log"
 
-	"encoding/csv"
-
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
@@ -227,28 +225,28 @@ func processCSVLineForUpload(done chan interface{}, rowStream <-chan csvLineInfo
 		for lineInfo := range rowStream {
 			i := lineInfo.LineNum
 			l := lineInfo.Line
-			//sLine := strings.Split(l, ",")
-			r := csv.NewReader(strings.NewReader(l))
-			sLineArr, err := r.ReadAll()
-			if err != nil || len(sLineArr) != 1 {
-				if i == 0 {
-					log.Println("Error in processing header")
-					select {
-					case <-done:
-						return
-					default:
-						done <- struct{}{}
-						log.Println("...Exiting...")
-						return
-					}
-				}
-				if l != "" {
-					log.Printf("Error in processing record")
-					log.Printf("Skipping line number: %v : %v", i+1, l)
-				}
-				continue
-			}
-			sLine := sLineArr[0]
+			sLine := strings.Split(l, "|")
+			//r := csv.NewReader(strings.NewReader(l))
+			//sLineArr, err := r.ReadAll()
+			//if err != nil || len(sLineArr) != 1 {
+			//	if i == 0 {
+			//		log.Println("Error in processing header")
+			//		select {
+			//		case <-done:
+			//			return
+			//		default:
+			//			done <- struct{}{}
+			//			log.Println("...Exiting...")
+			//			return
+			//		}
+			//	}
+			//	if l != "" {
+			//		log.Printf("Error in processing record")
+			//		log.Printf("Skipping line number: %v : %v", i+1, l)
+			//	}
+			//	continue
+			//}
+			//sLine := sLineArr[0]
 			if i == 0 {
 				//header: line just process to get keys
 				if !processHeader(sLine) {
