@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	concurrency    = 3
 	uploadEndpoint = "api.clevertap.com/1/upload"
+	concurrency    = 3
 )
 
 var ctBatchSize = 1000

@@ -31,8 +31,13 @@ func (u *uploadEventsFromMParticle) Execute() {
 	ctBatchSize = 100
 	var wg sync.WaitGroup
 	done := make(chan interface{})
-	batchAndSend(done, processRecordForUpload(done, mparticleEventRecordsGenerator(done,
-		mparticleAllS3ObjectsGenerator(done))), &wg)
+	if globals.StartDate != nil && *globals.StartDate != "" {
+		batchAndSend(done, processRecordForUpload(done, mparticleEventRecordsGenerator(done,
+			mparticleStartEndDateS3ObjectsGenerator(done))), &wg)
+	} else {
+		batchAndSend(done, processRecordForUpload(done, mparticleEventRecordsGenerator(done,
+			mparticleAllS3ObjectsGenerator(done))), &wg)
+	}
 
 	wg.Wait()
 	log.Println("done")
@@ -247,6 +252,156 @@ func (e *mparticleEventRecordInfo) print() {
 	//fmt.Printf("\nresponse: %v", e.response)
 }
 
+func getCommonPrefixes(svc *s3.S3) ([]string, error) {
+	marker := ""
+	commonPrefixes := make([]string, 0)
+	for {
+		input := &s3.ListObjectsInput{
+			Bucket:    aws.String(*globals.S3Bucket),
+			Marker:    aws.String(marker),
+			Prefix:    aws.String(""),
+			Delimiter: aws.String("/"),
+		}
+		result, err := svc.ListObjects(input)
+
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				case s3.ErrCodeNoSuchBucket:
+					log.Println(s3.ErrCodeNoSuchBucket, aerr.Error())
+				default:
+					log.Println(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				log.Println(err.Error())
+			}
+			return nil, err
+		}
+
+		commonPs := result.CommonPrefixes
+
+		for _, cp := range commonPs {
+			commonPrefixes = append(commonPrefixes, *cp.Prefix)
+		}
+
+		if len(result.Contents) == 0 {
+			break
+		}
+
+		marker = *result.Contents[len(result.Contents)-1].Key
+
+	}
+
+	return commonPrefixes, nil
+}
+
+//android/2018-10-02
+
+func mparticleStartEndDateS3ObjectsGenerator(done chan interface{}) <-chan []*s3.Object {
+	mparticleObjectsStream := make(chan []*s3.Object)
+	go func() {
+		defer close(mparticleObjectsStream)
+		creds := credentials.NewStaticCredentials(*globals.AWSAccessKeyID,
+			*globals.AWSSecretAccessKey, "")
+		sess, _ := session.NewSession(&aws.Config{
+			Region:      aws.String(*globals.AWSRegion),
+			Credentials: creds,
+		},
+		)
+
+		svc := s3.New(sess)
+		prefixes, err := getCommonPrefixes(svc)
+
+		if err != nil {
+			select {
+			case <-done:
+				return
+			default:
+				done <- struct{}{}
+				return
+			}
+		}
+
+		eventsDate := *globals.StartDate
+		endDate := *globals.EndDate
+
+		if endDate == "" {
+			endDate = time.Now().Local().Format("2006-01-02")
+		}
+
+		log.Printf("Fetching events with start date: %v and end date: %v ", eventsDate, endDate)
+
+		for _, prefix := range prefixes {
+			//for each prefix
+			eventsDate = *globals.StartDate
+			for {
+				//for each date between start and end date
+				marker := ""
+				for {
+					input := &s3.ListObjectsInput{
+						Bucket: aws.String(*globals.S3Bucket),
+						Marker: aws.String(marker),
+						Prefix: aws.String(prefix + eventsDate),
+					}
+					result, err := svc.ListObjects(input)
+
+					if err != nil {
+						if aerr, ok := err.(awserr.Error); ok {
+							switch aerr.Code() {
+							case s3.ErrCodeNoSuchBucket:
+								log.Println(s3.ErrCodeNoSuchBucket, aerr.Error())
+							default:
+								log.Println(aerr.Error())
+							}
+						} else {
+							// Print the error, cast err to awserr.Error to get the Code and
+							// Message from an error.
+							log.Println(err.Error())
+						}
+
+						select {
+						case <-done:
+							return
+						default:
+							done <- struct{}{}
+							return
+						}
+					}
+
+					select {
+					case <-done:
+						return
+					case mparticleObjectsStream <- result.Contents:
+					}
+
+					//for _, obj := range result.Contents {
+					//	fmt.Println(*obj.Key)
+					//}
+
+					if len(result.Contents) == 0 {
+						break
+					}
+
+					marker = *result.Contents[len(result.Contents)-1].Key
+				}
+
+				if eventsDate == endDate {
+					//reached end date
+					break
+				}
+
+				t, _ := time.Parse("2006-01-02", eventsDate)
+				t = t.AddDate(0, 0, 1)
+				eventsDate = t.Format("2006-01-02")
+			}
+		}
+	}()
+
+	return mparticleObjectsStream
+}
+
 func mparticleAllS3ObjectsGenerator(done chan interface{}) <-chan []*s3.Object {
 	mparticleObjectsStream := make(chan []*s3.Object)
 	go func() {
@@ -302,6 +457,10 @@ func mparticleAllS3ObjectsGenerator(done chan interface{}) <-chan []*s3.Object {
 			case <-done:
 				return
 			case mparticleObjectsStream <- result.Contents:
+			}
+
+			if len(result.Contents) == 0 {
+				break
 			}
 
 			marker = *result.Contents[len(result.Contents)-1].Key
