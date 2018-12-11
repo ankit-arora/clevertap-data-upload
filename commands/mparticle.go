@@ -509,7 +509,7 @@ func mparticleEventRecordsGenerator(done chan interface{}, inputBucketStream <-c
 					if err == nil && resp.StatusCode < 300 {
 						scanner := bufio.NewScanner(resp.Body)
 						buf := make([]byte, 0, 64*1024)
-						scanner.Buffer(buf, 5*1024*1024)
+						scanner.Buffer(buf, 20*1024*1024)
 						scanner.Split(ScanCRLF)
 						for scanner.Scan() {
 							s := scanner.Text()
