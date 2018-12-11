@@ -127,7 +127,12 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 	records := make([]interface{}, 0)
 	for _, eventFromMParticle := range info.Events {
 		eventData := eventFromMParticle.Data
-		eventName := eventData["event_name"].(string)
+		eventNameI, ok := eventData["event_name"]
+		if !ok {
+			log.Printf("Event name missing for record: %v . Skipping", info)
+			continue
+		}
+		eventName := eventNameI.(string)
 		if eventName == "" {
 			log.Printf("Event name missing for record: %v . Skipping", info)
 			continue
@@ -193,8 +198,8 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 			propData[k] = v
 			if globals.Schema != nil {
 				dataType, ok := globals.Schema[k]
-				dataType = strings.ToLower(dataType)
 				if ok {
+					dataType = strings.ToLower(dataType)
 					valueType := reflect.TypeOf(v)
 					switch valueType.Kind() {
 					case reflect.String:
