@@ -184,7 +184,7 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 			} else {
 				iosAdId, ok := info.DeviceInfo["ios_advertising_id"]
 				if ok {
-					record["objectId"] = "-g" + iosAdId.(string)
+					record["objectId"] = "-g" + strings.Replace(iosAdId.(string), "-", "", -1)
 				} else {
 					log.Printf("Both user_id and advertising ids are missing for record: %v . Skipping", eventFromMParticle)
 					continue
