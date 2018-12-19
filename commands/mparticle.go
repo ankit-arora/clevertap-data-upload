@@ -125,6 +125,8 @@ type mparticleEventRecordInfo struct {
 
 func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 	records := make([]interface{}, 0)
+	userIdentities := info.UserIdentities
+	identityCustomerId, identityCustomerIdExists := userIdentities["customerId"]
 	for _, eventFromMParticle := range info.Events {
 		eventData := eventFromMParticle.Data
 		eventName := eventData["event_name"].(string)
@@ -165,27 +167,32 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 		record["ts"] = ts / 1000
 
 		customAttributes := eventData["custom_attributes"].(map[string]interface{})
-		userId, ok := customAttributes["user_id"]
 
-		if ok && userId.(string) != "-1" {
-			//send userId as identity
-			identity := userId.(string)
+		if identityCustomerIdExists && identityCustomerId.(string) != "-1" {
+			identity := identityCustomerId.(string)
 			record["identity"] = identity
 		} else {
-			//generate objectId from advertising id
-			androidAdId, ok := info.DeviceInfo["android_advertising_id"]
-			if ok {
-				record["objectId"] = "__g" + strings.Replace(androidAdId.(string), "-", "", -1)
+			userId, ok := customAttributes["customerId"]
+			if ok && userId.(string) != "-1" {
+				//send userId as identity
+				identity := userId.(string)
+				record["identity"] = identity
 			} else {
-				iosAdId, ok := info.DeviceInfo["ios_advertising_id"]
+				//generate objectId from advertising id
+				androidAdId, ok := info.DeviceInfo["android_advertising_id"]
 				if ok {
-					record["objectId"] = "-g" + iosAdId.(string)
+					record["objectId"] = "__g" + strings.Replace(androidAdId.(string), "-", "", -1)
 				} else {
-					log.Printf("Both user_id and advertising ids are missing for record: %v . Skipping", eventFromMParticle)
-					continue
+					iosAdId, ok := info.DeviceInfo["ios_advertising_id"]
+					if ok {
+						record["objectId"] = "-g" + iosAdId.(string)
+					} else {
+						log.Printf("Both customerId and advertising ids are missing for record: %v . Skipping", info)
+						continue
+					}
 				}
-			}
 
+			}
 		}
 
 		propData := make(map[string]interface{})
@@ -253,47 +260,8 @@ func (e *mparticleEventRecordInfo) print() {
 }
 
 func getCommonPrefixes(svc *s3.S3) ([]string, error) {
-	marker := ""
 	commonPrefixes := make([]string, 0)
-	for {
-		input := &s3.ListObjectsInput{
-			Bucket:    aws.String(*globals.S3Bucket),
-			Marker:    aws.String(marker),
-			Prefix:    aws.String(""),
-			Delimiter: aws.String("/"),
-		}
-		result, err := svc.ListObjects(input)
-
-		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				switch aerr.Code() {
-				case s3.ErrCodeNoSuchBucket:
-					log.Println(s3.ErrCodeNoSuchBucket, aerr.Error())
-				default:
-					log.Println(aerr.Error())
-				}
-			} else {
-				// Print the error, cast err to awserr.Error to get the Code and
-				// Message from an error.
-				log.Println(err.Error())
-			}
-			return nil, err
-		}
-
-		commonPs := result.CommonPrefixes
-
-		for _, cp := range commonPs {
-			commonPrefixes = append(commonPrefixes, *cp.Prefix)
-		}
-
-		if len(result.Contents) == 0 {
-			break
-		}
-
-		marker = *result.Contents[len(result.Contents)-1].Key
-
-	}
-
+	commonPrefixes = append(commonPrefixes, "data/mparticle_processed/web/")
 	return commonPrefixes, nil
 }
 
