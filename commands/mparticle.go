@@ -106,6 +106,7 @@ func buildRequest(serviceName, region, bucketName, objectName, body string) (*ht
 }
 */
 
+// MparticleEventData ...
 type MparticleEventData struct {
 	Data      map[string]interface{} `json:"data,omitempty"`
 	EventType string                 `json:"event_type,omitempty"`
@@ -120,7 +121,7 @@ type mparticleEventRecordInfo struct {
 	ApplicationInfo       map[string]interface{} `json:"application_info,omitempty"`
 	SchemaVersion         float64                `json:"schema_version,omitempty"`
 	Environment           string                 `json:"environment,omitempty"`
-	Ip                    string                 `json:"ip,omitempty"`
+	IP                    string                 `json:"ip,omitempty"`
 }
 
 func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
@@ -147,7 +148,7 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 		}
 		record := make(map[string]interface{})
 		isEventRestricted := false
-		for _, r := range RESTRICTED_EVENTS {
+		for _, r := range restrictedEvents {
 			if eventName == r {
 				isEventRestricted = true
 				break
@@ -170,21 +171,21 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 		record["ts"] = ts / 1000
 
 		customAttributes := eventData["custom_attributes"].(map[string]interface{})
-		userId, ok := customAttributes["user_id"]
+		userID, ok := customAttributes["user_id"]
 
-		if ok && userId.(string) != "-1" {
+		if ok && userID.(string) != "-1" {
 			//send userId as identity
-			identity := userId.(string)
+			identity := userID.(string)
 			record["identity"] = identity
 		} else {
 			//generate objectId from advertising id
-			androidAdId, ok := info.DeviceInfo["android_advertising_id"]
+			androidAdID, ok := info.DeviceInfo["android_advertising_id"]
 			if ok {
-				record["objectId"] = "__g" + strings.Replace(androidAdId.(string), "-", "", -1)
+				record["objectId"] = "__g" + strings.Replace(androidAdID.(string), "-", "", -1)
 			} else {
-				iosAdId, ok := info.DeviceInfo["ios_advertising_id"]
+				iosAdID, ok := info.DeviceInfo["ios_advertising_id"]
 				if ok {
-					record["objectId"] = "-g" + strings.Replace(iosAdId.(string), "-", "", -1)
+					record["objectId"] = "-g" + strings.Replace(iosAdID.(string), "-", "", -1)
 				} else {
 					log.Printf("Both user_id and advertising ids are missing for record: %v . Skipping", eventFromMParticle)
 					continue
@@ -253,7 +254,7 @@ func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
 	return records, nil
 }
 
-func (e *mparticleEventRecordInfo) print() {
+func (info *mparticleEventRecordInfo) print() {
 	//fmt.Printf("\nresponse: %v", e.response)
 }
 

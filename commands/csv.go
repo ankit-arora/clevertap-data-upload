@@ -17,6 +17,7 @@ type csvLineInfo struct {
 	Line    string
 }
 
+// ScanCRLF ...
 func ScanCRLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil

@@ -27,16 +27,16 @@ import (
 )
 
 const (
-	MIXPANEL_PROFILES_EXPORT_EP = "https://mixpanel.com/api/2.0/engage/"
-	MIXPANEL_EVENTS_EXPORT_EP   = "https://data.mixpanel.com/api/2.0/export/"
-	MAX_PROPS_COUNT             = 255
+	mixpanelProfilesExportEP = "https://mixpanel.com/api/2.0/engage/"
+	mixpanelEventsExportEP   = "https://data.mixpanel.com/api/2.0/export/"
+	maxPropsCount            = 255
 )
 
-var RESTRICTED_EVENTS = []string{
+var restrictedEvents = []string{
 	"Notification Sent", "Notification Viewed", "Notification Clicked", "UTM Visited", "App Launched", "App Uninstalled", "Stayed",
 }
 
-var PROPERTIES_MAP = map[string]string{
+var propertiesMap = map[string]string{
 	"name":          "Name",
 	"email":         "Email",
 	"gender":        "Gender",
@@ -79,7 +79,7 @@ type recordInfo interface {
 //"total": 1}
 
 type profileResult struct {
-	DistinctId string                 `json:"$distinct_id,omitempty"`
+	DistinctID string                 `json:"$distinct_id,omitempty"`
 	Properties map[string]interface{} `json:"$properties,omitempty"`
 }
 
@@ -87,7 +87,7 @@ type mixpanelProfileRecordInfo struct {
 	Page      int             `json:"page"`
 	PageSize  int             `json:"page_size"`
 	Results   []profileResult `json:"results,omitempty"`
-	SessionId string          `json:"session_id"`
+	SessionID string          `json:"session_id"`
 	Status    string          `json:"status"`
 	Total     int             `json:"total"`
 }
@@ -96,7 +96,7 @@ func (p *mixpanelProfileRecordInfo) convertToCT() ([]interface{}, error) {
 	records := make([]interface{}, 0)
 
 	for _, r := range p.Results {
-		identity := r.DistinctId
+		identity := r.DistinctID
 		if identity != "" {
 			record := make(map[string]interface{})
 			record["identity"] = identity
@@ -105,7 +105,7 @@ func (p *mixpanelProfileRecordInfo) convertToCT() ([]interface{}, error) {
 			propertyData := make(map[string]interface{})
 			propsCount := 0
 			for k, v := range r.Properties {
-				if propsCount > MAX_PROPS_COUNT {
+				if propsCount > maxPropsCount {
 					break
 				}
 				if v == nil {
@@ -126,7 +126,7 @@ func (p *mixpanelProfileRecordInfo) convertToCT() ([]interface{}, error) {
 					k = k[1:]
 				}
 
-				if nK, ok := PROPERTIES_MAP[k]; ok {
+				if nK, ok := propertiesMap[k]; ok {
 					k = nK
 				}
 
@@ -160,14 +160,14 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan recordInfo {
 	go func() {
 		defer close(mixpanelRecordStream)
 		client := &http.Client{Timeout: time.Minute * 1}
-		sessionId := ""
+		sessionID := ""
 		page := "0"
 		pageSize := 0
 		encodedSecret := base64.StdEncoding.EncodeToString([]byte(*globals.MixpanelSecret))
 		for {
-			endpoint := MIXPANEL_PROFILES_EXPORT_EP
-			if sessionId != "" {
-				endpoint += "?session_id=" + sessionId + "&page=" + page
+			endpoint := mixpanelProfilesExportEP
+			if sessionID != "" {
+				endpoint += "?session_id=" + sessionID + "&page=" + page
 			}
 			log.Printf("Fetching profiles data from Mixpanel for page: %v", page)
 			req, err := http.NewRequest("GET", endpoint, nil)
@@ -188,7 +188,7 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan recordInfo {
 				err = json.NewDecoder(resp.Body).Decode(info)
 				if err != nil {
 					log.Println("Error parsing profiles json response from Mixpanel", err)
-					log.Printf("retrying for session_id : %v and page : %v after 20 seconds", sessionId, page)
+					log.Printf("retrying for session_id : %v and page : %v after 20 seconds", sessionID, page)
 					ioutil.ReadAll(resp.Body)
 					resp.Body.Close()
 					time.Sleep(20 * time.Second)
@@ -204,11 +204,11 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan recordInfo {
 				case mixpanelRecordStream <- info:
 				}
 
-				if sessionId == "" {
+				if sessionID == "" {
 					pageSize = info.PageSize
-					sessionId = info.SessionId
+					sessionID = info.SessionID
 					log.Printf("Mixpanel request page size: %v", pageSize)
-					log.Printf("Mixpanel request session id: %v", sessionId)
+					log.Printf("Mixpanel request session id: %v", sessionID)
 				}
 				if len(info.Results) < pageSize {
 					//got less number of results from pageSize. End of response
@@ -224,7 +224,7 @@ func mixpanelProfileRecordsGenerator(done chan interface{}) <-chan recordInfo {
 			} else {
 				body, _ := ioutil.ReadAll(resp.Body)
 				log.Println("response body: ", string(body))
-				log.Printf("retrying for session_id : %v and page : %v after 20 seconds", sessionId, page)
+				log.Printf("retrying for session_id : %v and page : %v after 20 seconds", sessionID, page)
 			}
 			if resp != nil {
 				resp.Body.Close()
@@ -313,7 +313,7 @@ func (e *mixpanelEventRecordInfo) convertToCT() ([]interface{}, error) {
 		return records, nil
 	}
 	isEventRestricted := false
-	for _, r := range RESTRICTED_EVENTS {
+	for _, r := range restrictedEvents {
 		if eventName == r {
 			isEventRestricted = true
 			break
@@ -330,7 +330,7 @@ func (e *mixpanelEventRecordInfo) convertToCT() ([]interface{}, error) {
 	propertyData := make(map[string]interface{})
 	propsCount := 0
 	for k, v := range e.Properties {
-		if propsCount > MAX_PROPS_COUNT {
+		if propsCount > maxPropsCount {
 			break
 		}
 		if k == "distinct_id" || k == "time" {
@@ -404,7 +404,7 @@ func mixpanelEventRecordsGenerator(done chan interface{}) <-chan recordInfo {
 		encodedSecret := base64.StdEncoding.EncodeToString([]byte(*globals.MixpanelSecret))
 		for {
 			log.Printf("Fetching events data from Mixpanel for date: %v", eventsDate)
-			endpoint := fmt.Sprintf(MIXPANEL_EVENTS_EXPORT_EP+"?from_date=%v&to_date=%v", eventsDate, eventsDate)
+			endpoint := fmt.Sprintf(mixpanelEventsExportEP+"?from_date=%v&to_date=%v", eventsDate, eventsDate)
 			req, err := http.NewRequest("GET", endpoint, nil)
 			if err != nil {
 				log.Fatal(err)

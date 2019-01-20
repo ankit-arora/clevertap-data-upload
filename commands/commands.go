@@ -6,21 +6,22 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"os"
 
 	"fmt"
 
-	"sync"
-
 	"github.com/ankit-arora/clevertap-data-upload/globals"
 )
 
+// Command ...
 type Command interface {
 	Execute()
 }
 
+// Get ...
 func Get() Command {
 	if *globals.CSVFilePath != "" && (*globals.Type == "profile" || *globals.Type == "event") {
 		return &uploadEventsProfilesFromCSVCommand{}
@@ -51,6 +52,7 @@ func Get() Command {
 //"ctUnprocessed": []
 //}
 
+// CTResponse ...
 type CTResponse struct {
 	Status      string        `json:"status,omitempty"`
 	Processed   int           `json:"processed,omitempty"`
@@ -58,6 +60,7 @@ type CTResponse struct {
 	Error       string        `json:"error,omitempty"`
 }
 
+// Summary ...
 var Summary = struct {
 	sync.Mutex
 	ctProcessed           int64
