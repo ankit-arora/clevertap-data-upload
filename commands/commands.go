@@ -23,6 +23,11 @@ type Command interface {
 
 // Get ...
 func Get() Command {
+	if *globals.ImportService == "leanplumToS3" || *globals.ImportService == "leanplumS3ToCT" ||
+		*globals.ImportService == "leanplumToS3Throttled" {
+		return &uploadRecordsFromLeanplum{}
+	}
+
 	if *globals.CSVFilePath != "" && (*globals.Type == "profile" || *globals.Type == "event") {
 		return &uploadEventsProfilesFromCSVCommand{}
 	}
