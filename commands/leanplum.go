@@ -23,11 +23,21 @@ const (
 	leanplumExportEP = "https://www.leanplum.com/api"
 )
 
+type s3CopyEntryInfo struct {
+	DestFile   string `json:"destFile"`
+	SourceFile string `json:"sourceFile"`
+}
+
+type s3CopyStatusInfo struct {
+	Success []s3CopyEntryInfo `json:"success"`
+}
+
 type jobInfo struct {
-	JobID   string   `json:"jobId,omitempty"`
-	Success bool     `json:"success,omitempty"`
-	State   string   `json:"state,omitempty"`
-	Files   []string `json:"files,omitempty"`
+	JobID        string           `json:"jobId,omitempty"`
+	Success      bool             `json:"success,omitempty"`
+	State        string           `json:"state,omitempty"`
+	Files        []string         `json:"files,omitempty"`
+	S3CopyStatus s3CopyStatusInfo `json:"s3CopyStatus"`
 }
 
 type jobResponse struct {
@@ -308,10 +318,8 @@ func leanplumRecordsFromS3Generator(done chan interface{}) <-chan recordInfo {
 		scanner.Buffer(buf, 20*1024*1024)
 		scanner.Split(ScanCRLF)
 		for scanner.Scan() {
-			s := scanner.Text()
-			s = strings.Trim(s, " \n \r")
-			split := strings.Split(s, "/")
-			contentKey := s3ObjectPrefix + split[len(split)-1]
+			contentKey := scanner.Text()
+			contentKey = strings.Trim(contentKey, " \n \r")
 			log.Println("Processing data from: " + contentKey)
 			success := processFile(contentKey, leanplumRecordStream, done)
 			if !success {
@@ -327,8 +335,8 @@ func leanplumRecordsFromS3Generator(done chan interface{}) <-chan recordInfo {
 
 var lpCredError = errors.New("Error: Please check your LeanPlum or S3 credentials")
 
-func pushDataForStartEndDate(startDate, endDate string) ([]string, error) {
-	var files []string
+func pushDataForStartEndDate(startDate, endDate string) ([]s3CopyEntryInfo, error) {
+	var files []s3CopyEntryInfo
 	jobID := getJobID(startDate, endDate)
 	if jobID == "" {
 		return nil, lpCredError
@@ -352,7 +360,7 @@ func pushDataForStartEndDate(startDate, endDate string) ([]string, error) {
 		}
 		state := j.Res[0].State
 		if state == "FINISHED" {
-			files = j.Res[0].Files
+			files = j.Res[0].S3CopyStatus.Success
 			break
 		}
 		if state == "FAILED" {
@@ -411,7 +419,7 @@ func leanplumRecordsToS3GeneratorThrottled(done chan interface{}) <-chan recordI
 
 			if files != nil {
 				for i := 0; i < len(files); i++ {
-					file.Write([]byte(files[i]))
+					file.Write([]byte(files[i].DestFile))
 					file.Write([]byte("\n"))
 				}
 			}
@@ -462,7 +470,7 @@ func leanplumRecordsToS3Generator(done chan interface{}) <-chan recordInfo {
 		}
 		if files != nil {
 			for i := 0; i < len(files); i++ {
-				file.Write([]byte(files[i]))
+				file.Write([]byte(files[i].DestFile))
 				file.Write([]byte("\n"))
 			}
 		}
