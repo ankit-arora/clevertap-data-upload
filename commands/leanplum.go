@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	leanplumExportEP = "http://www.leanplum.com/api"
+	leanplumExportEP = "https://www.leanplum.com/api"
 )
 
 type jobInfo struct {
@@ -198,10 +198,11 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 
 func getJobID(startDate, endDate string) string {
 	client := &http.Client{Timeout: time.Minute * 1}
-	endpoint := leanplumExportEP + "?appId=" + lpAppID + "&lpClientKey=" + lpClientKey +
+	endpoint := leanplumExportEP + "?appId=" + lpAppID + "&clientKey=" + lpClientKey +
 		"&apiVersion=1.0.6&action=exportData&startDate=" + startDate + "&endDate=" + endDate +
 		"&s3BucketName=" + s3BucketName + "&s3AccessId=" + s3AccessId + "&s3AccessKey=" +
 		s3SecretKey + "&s3ObjectPrefix=" + s3ObjectPrefix
+
 	req, err := http.NewRequest("POST", endpoint, nil)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -336,7 +337,7 @@ func pushDataForStartEndDate(startDate, endDate string) ([]string, error) {
 	//http://www.leanplum.com/api?appId=appID&clientKey=clientKey&apiVersion=1.0.6&action=getExportResults&jobId=jobID
 	for {
 		client := &http.Client{Timeout: time.Minute * 1}
-		endpoint := leanplumExportEP + "?appId=" + lpAppID + "&lpClientKey=" + lpClientKey + "&apiVersion=1.0.6&action=getExportResults&jobId=" + jobID
+		endpoint := leanplumExportEP + "?appId=" + lpAppID + "&clientKey=" + lpClientKey + "&apiVersion=1.0.6&action=getExportResults&jobId=" + jobID
 		//log.Printf("Fetching profiles data from Leanplum for page: %v", page)
 		req, err := http.NewRequest("POST", endpoint, nil)
 		resp, err := client.Do(req)
