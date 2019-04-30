@@ -3,6 +3,7 @@ package commands
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -206,6 +207,7 @@ func getJobID(startDate, endDate string) string {
 	if err != nil {
 		log.Fatal(err)
 	}
+	//fmt.Printf("Job status code: %v\n", resp.StatusCode)
 	d := json.NewDecoder(resp.Body)
 	j := &jobResponse{}
 	err = d.Decode(j)
@@ -322,9 +324,14 @@ func leanplumRecordsFromS3Generator(done chan interface{}) <-chan recordInfo {
 	return leanplumRecordStream
 }
 
-func pushDataForStartEndDate(startDate, endDate string) []string {
+var lpCredError = errors.New("Error: Please check your LeanPlum or S3 credentials")
+
+func pushDataForStartEndDate(startDate, endDate string) ([]string, error) {
 	var files []string
 	jobID := getJobID(startDate, endDate)
+	if jobID == "" {
+		return nil, lpCredError
+	}
 	log.Printf("job id: %v", jobID)
 	//http://www.leanplum.com/api?appId=appID&clientKey=clientKey&apiVersion=1.0.6&action=getExportResults&jobId=jobID
 	for {
@@ -347,10 +354,13 @@ func pushDataForStartEndDate(startDate, endDate string) []string {
 			files = j.Res[0].Files
 			break
 		}
+		if state == "FAILED" {
+			return nil, lpCredError
+		}
 		log.Printf("Waiting 2 minutes for files to be ready for jobID: %v , state: %v", jobID, state)
 		time.Sleep(2 * time.Minute)
 	}
-	return files
+	return files, nil
 }
 
 //saving to S3 Throttled
@@ -392,7 +402,11 @@ func leanplumRecordsToS3GeneratorThrottled(done chan interface{}) <-chan recordI
 
 			log.Printf("Getting data for dates %v to %v", sDate, eDate)
 
-			files := pushDataForStartEndDate(sDate, eDate)
+			files, err := pushDataForStartEndDate(sDate, eDate)
+
+			if err != nil {
+				log.Fatal(err)
+			}
 
 			if files != nil {
 				for i := 0; i < len(files); i++ {
@@ -441,7 +455,10 @@ func leanplumRecordsToS3Generator(done chan interface{}) <-chan recordInfo {
 			log.Fatal(err)
 		}
 
-		files := pushDataForStartEndDate(startDate, endDate)
+		files, err := pushDataForStartEndDate(startDate, endDate)
+		if err != nil {
+			log.Fatal(err)
+		}
 		if files != nil {
 			for i := 0; i < len(files); i++ {
 				file.Write([]byte(files[i]))
