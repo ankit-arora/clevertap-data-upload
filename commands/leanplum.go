@@ -19,10 +19,6 @@ import (
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 )
 
-const (
-	leanplumExportEP = "https://www.leanplum.com/api"
-)
-
 type s3CopyEntryInfo struct {
 	DestFile   string `json:"destFile"`
 	SourceFile string `json:"sourceFile"`
@@ -156,13 +152,16 @@ var s3ObjectPrefix string
 var startDate string
 var endDate string
 
-var s3AccessId string
-var s3SecretKey string
-var s3BucketName string
-var s3RegionName string
-var generatedFilesFile string
-var lpAppID string
-var lpClientKey string
+var (
+	s3AccessId         string
+	s3SecretKey        string
+	s3BucketName       string
+	s3RegionName       string
+	generatedFilesFile string
+	lpAppID            string
+	lpClientKey        string
+	leanplumExportEP   = "https://www.leanplum.com/api"
+)
 
 func (u *uploadRecordsFromLeanplum) Execute() {
 	log.Println("started")
@@ -177,6 +176,10 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 		*globals.LeanplumOutFilesPath = *globals.LeanplumOutFilesPath + "/"
 	}
 	generatedFilesFile = *globals.LeanplumOutFilesPath + "files-" + startDate + "-" + endDate + ".txt"
+	leanplumExportEP = "https://www.leanplum.com/api"
+	if *globals.LeanplumAPIEndpoint != "" {
+		leanplumExportEP = *globals.LeanplumAPIEndpoint
+	}
 	done := make(chan interface{})
 	if *globals.ImportService == "leanplumToS3" || *globals.ImportService == "leanplumToS3Throttled" {
 		lpAppID = *globals.LeanplumAppID
