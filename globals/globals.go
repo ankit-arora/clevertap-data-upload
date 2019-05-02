@@ -73,7 +73,7 @@ func Init() bool {
 	DryRun = flag.Bool("dryrun", false, "Do a dry run, process records but do not upload")
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
-	if (*CSVFilePath == "" && *MixpanelSecret == "" && MPEventsFilePaths == nil && *ImportService == "") || *AccountID == "" || *AccountPasscode == "" {
+	if (*CSVFilePath == "" && *MixpanelSecret == "" && MPEventsFilePaths == nil && *ImportService == "") || *AccountID == "" || (*AccountPasscode == "" && *ImportService != "leanplumToS3" && *ImportService != "leanplumToS3Throttled") {
 		log.Println("Mixpanel secret or CSV file path or Mixpanel events file path or Import service option, account id, and passcode are mandatory")
 		return false
 	}
