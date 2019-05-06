@@ -198,8 +198,8 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 		log.Println("done")
 	} else {
 		if *globals.ImportService == "leanplumS3ToCT" {
-			//batch size of 200 for leanplum data
-			ctBatchSize = 200
+			//batch size of 600 for leanplum data
+			ctBatchSize = 600
 			var wg sync.WaitGroup
 			batchAndSend(done, processRecordForUpload(done, leanplumRecordsFromS3Generator(done)), &wg)
 			wg.Wait()
