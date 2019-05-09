@@ -172,7 +172,7 @@ func sendDataToCTAPI(payload map[string]interface{}, endpoint string) (string, e
 			body, _ = ioutil.ReadAll(resp.Body)
 		}
 
-		if resp.StatusCode == http.StatusBadRequest && err == nil && *globals.Type == "profile" {
+		if err == nil && resp.StatusCode == http.StatusBadRequest && *globals.Type == "profile" {
 			//{ "status" : "fail" , "error" : "Malformed request" , "code" : 400}
 			respFromCT := &CTResponse{}
 			ctRespError := json.Unmarshal(body, respFromCT)
