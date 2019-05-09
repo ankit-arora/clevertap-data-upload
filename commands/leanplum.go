@@ -337,8 +337,8 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 		log.Println("done")
 	} else {
 		if *globals.ImportService == "leanplumS3ToCT" {
-			//batch size of 200 for leanplum data
-			ctBatchSize = 200
+			//batch size of 400 for leanplum data
+			ctBatchSize = 400
 			var wg sync.WaitGroup
 			apiConcurrency = 9
 			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
