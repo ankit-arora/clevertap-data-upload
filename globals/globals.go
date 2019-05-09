@@ -23,6 +23,7 @@ var StartDate *string
 var EndDate *string
 var AccountID *string
 var AccountPasscode *string
+var AccountToken *string
 var EvtName *string
 var Type *string
 var Region *string
@@ -69,6 +70,7 @@ func Init() bool {
 	StartTs = flag.Float64("startTs", 0, "Start timestamp for events upload")
 	AccountID = flag.String("id", "", "CleverTap Account ID")
 	AccountPasscode = flag.String("p", "", "CleverTap Account Passcode")
+	AccountToken = flag.String("tk", "", "CleverTap Account Token")
 	EvtName = flag.String("evtName", "", "Event name")
 	Type = flag.String("t", "profile", "The type of data, either profile, event, or both, defaults to profile")
 	Region = flag.String("r", "eu", "The account region, either eu or in, defaults to eu")
@@ -160,6 +162,11 @@ func Init() bool {
 			return false
 		}
 		*StartDate = t.Format("20060102")
+	}
+
+	if *ImportService == "leanplumS3ToCT" && *AccountToken == "" {
+		log.Println("Account token is missing")
+		return false
 	}
 
 	return true

@@ -18,7 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/aws/signer/v4"
+	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
@@ -32,10 +32,10 @@ func (u *uploadEventsFromMParticle) Execute() {
 	var wg sync.WaitGroup
 	done := make(chan interface{})
 	if globals.StartDate != nil && *globals.StartDate != "" {
-		batchAndSend(done, processRecordForUpload(done, mparticleEventRecordsGenerator(done,
+		batchAndSendToCTAPI(done, processAPIRecordForUpload(done, mparticleEventRecordsGenerator(done,
 			mparticleStartEndDateS3ObjectsGenerator(done))), &wg)
 	} else {
-		batchAndSend(done, processRecordForUpload(done, mparticleEventRecordsGenerator(done,
+		batchAndSendToCTAPI(done, processAPIRecordForUpload(done, mparticleEventRecordsGenerator(done,
 			mparticleAllS3ObjectsGenerator(done))), &wg)
 	}
 
@@ -124,7 +124,7 @@ type mparticleEventRecordInfo struct {
 	IP                    string                 `json:"ip,omitempty"`
 }
 
-func (info *mparticleEventRecordInfo) convertToCT() ([]interface{}, error) {
+func (info *mparticleEventRecordInfo) convertToCTAPIFormat() ([]interface{}, error) {
 	records := make([]interface{}, 0)
 	for _, eventFromMParticle := range info.Events {
 		eventData := eventFromMParticle.Data
@@ -479,8 +479,8 @@ func mparticleAllS3ObjectsGenerator(done chan interface{}) <-chan []*s3.Object {
 	return mparticleObjectsStream
 }
 
-func mparticleEventRecordsGenerator(done chan interface{}, inputBucketStream <-chan []*s3.Object) <-chan recordInfo {
-	mparticleRecordStream := make(chan recordInfo)
+func mparticleEventRecordsGenerator(done chan interface{}, inputBucketStream <-chan []*s3.Object) <-chan apiUploadRecordInfo {
+	mparticleRecordStream := make(chan apiUploadRecordInfo)
 	go func() {
 		defer close(mparticleRecordStream)
 		creds := credentials.NewStaticCredentials(*globals.AWSAccessKeyID,

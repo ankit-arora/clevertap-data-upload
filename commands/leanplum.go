@@ -96,8 +96,8 @@ type leanplumRecordInfo struct {
 	BrowserVersion        string                 `json:"browserVersion,omitempty"`
 	SdkVersion            string                 `json:"sdkVersion,omitempty"`
 	SessionId             string                 `json:"sessionId,omitempty"`
-	Lat                   float64                `json:"lat,omitempty"`
-	Lon                   float64                `json:"lon,omitempty"`
+	Lat                   string                 `json:"lat,omitempty"`
+	Lon                   string                 `json:"lon,omitempty"`
 	Duration              float64                `json:"duration,omitempty"`
 	PriorTimeSpentInApp   float64                `json:"priorTimeSpentInApp,omitempty"`
 	TimezoneOffsetSeconds int32                  `json:"timezoneOffsetSeconds,omitempty"`
@@ -109,19 +109,31 @@ type leanplumRecordInfo struct {
 	UserAttributes        map[string]interface{} `json:"userAttributes,omitempty"`
 }
 
-func (l *leanplumRecordInfo) convertToCT() ([]interface{}, error) {
+func (l *leanplumRecordInfo) convertToCTAPIFormat() ([]interface{}, error) {
 	records := make([]interface{}, 0)
 	identity := l.UserId
-	if identity == "" {
+	objectID := l.getObjectID()
+	if identity == "" && objectID == "" {
 		return records, nil
 	}
 	profileRecord := make(map[string]interface{})
 
 	if l.UserAttributes != nil {
-		profileRecord["identity"] = identity
 		profileRecord["type"] = "profile"
 		profileRecord["ts"] = time.Now().Unix()
-		profileRecord["profileData"] = l.UserAttributes
+		profileData := make(map[string]interface{})
+		for key, val := range l.UserAttributes {
+			profileData[key] = val
+		}
+		if objectID != "" {
+			profileRecord["objectId"] = objectID
+			if identity != "" {
+				profileData["identity"] = identity
+			}
+		} else {
+			profileRecord["identity"] = identity
+		}
+		profileRecord["profileData"] = profileData
 		records = append(records, profileRecord)
 	}
 
@@ -129,13 +141,140 @@ func (l *leanplumRecordInfo) convertToCT() ([]interface{}, error) {
 		for j := 0; j < len(l.States[i].Events); j++ {
 			eventRecord := make(map[string]interface{})
 			eventRecord["type"] = "event"
-			eventRecord["evtData"] = l.States[i].Events[j].Parameters
+			if l.States[i].Events[j].Parameters != nil {
+				eventRecord["evtData"] = l.States[i].Events[j].Parameters
+			}
 			eventRecord["ts"] = int(l.States[i].Events[j].Time)
 			eventRecord["evtName"] = l.States[i].Events[j].Name
-			eventRecord["identity"] = identity
+			if objectID != "" {
+				eventRecord["objectId"] = objectID
+			} else {
+				eventRecord["identity"] = identity
+			}
 			records = append(records, eventRecord)
 		}
 	}
+
+	return records, nil
+}
+
+func (l *leanplumRecordInfo) getObjectID() string {
+	objectID := ""
+	if l.UserAttributes != nil {
+		systemName := l.SystemName
+		adID, ok := l.UserAttributes["adid"]
+		if ok && systemName == "Android OS" {
+			adIDStr := adID.(string)
+			if adIDStr != "" {
+				objectID = "__g" + strings.Replace(adIDStr, "-", "", -1)
+			}
+		} else {
+			if ok && systemName != "" {
+				log.Printf("Unknown system name: %v", systemName)
+			}
+			adID, ok = l.UserAttributes["IDFA"]
+			if ok && (systemName == "iOS" || systemName == "iPhone OS") {
+				adIDStr := adID.(string)
+				if adIDStr != "" {
+					objectID = "-g" + strings.ToLower(strings.Replace(adIDStr, "-", "", -1))
+				}
+			} else {
+				if ok && systemName != "" {
+					log.Printf("Unknown system name: %v", systemName)
+				}
+			}
+		}
+	}
+	return objectID
+}
+
+/*
+[{
+		"type": "meta",
+		"tk": "000-001",
+		"g": "__g63a14d2f600d42fa9346def003f620c19645ankit1",
+		"id": "ZWW-WWW-WWRZ",
+		"af": {
+			"Version Name": "1.0.6",
+			"App Version": "1.0.6",
+			"SDK Version": 30309,
+			"Model": "Redmi Note 4",
+			"Make": "Others",
+			"OS Version": "7.0",
+			"wdt": 2.57,
+			"hgt": 4.84
+		}
+	},
+	{
+		"data": {
+			"id": "",
+			"action": "register",
+			"type": "gcm"
+		},
+		"pg": 1,
+		"type": "data"
+	}
+]
+*/
+
+func (l *leanplumRecordInfo) convertToCTSDKFormat() ([]map[string]interface{}, error) {
+	objectID := l.getObjectID()
+	if objectID == "" || l.AppVersion == "" || l.DeviceModel == "" || l.SystemVersion == "" {
+		return nil, nil
+	}
+
+	records := make([]map[string]interface{}, 0)
+
+	//meta record
+	metaRecord := make(map[string]interface{})
+	metaRecord["type"] = "meta"
+	metaRecord["id"] = *globals.AccountID
+	metaRecord["g"] = objectID
+	metaRecord["tk"] = *globals.AccountToken
+
+	appFields := make(map[string]interface{})
+	appFields["Version Name"] = l.AppVersion
+	appFields["App Version"] = l.AppVersion
+	if l.SystemName == "iOS" || l.SystemName == "iPhone OS" {
+		appFields["SDK Version"] = "30401"
+		appFields["Make"] = "Apple"
+	} else {
+		appFields["SDK Version"] = "30403"
+		appFields["Make"] = "Others"
+	}
+	appFields["Model"] = l.DeviceModel
+	appFields["OS Version"] = l.SystemVersion
+	appFields["wdt"] = 2.57
+	appFields["hgt"] = 4.84
+	if l.Lat != "" && l.Lon != "" {
+		lat, err1 := strconv.ParseFloat(l.Lat, 64)
+		lon, err2 := strconv.ParseFloat(l.Lon, 64)
+		if err1 == nil && err2 == nil {
+			appFields["Latitude"] = lat
+			appFields["Longitude"] = lon
+		}
+	}
+
+	metaRecord["af"] = appFields
+	records = append(records, metaRecord)
+
+	//data record
+	dataRecord := make(map[string]interface{})
+	dataRecord["pg"] = 1
+	dataRecord["type"] = "data"
+
+	data := make(map[string]interface{})
+	data["id"] = ""
+	data["action"] = "register"
+	if l.SystemName == "iOS" || l.SystemName == "iPhone OS" {
+		data["type"] = "apns"
+	} else {
+		data["type"] = "gcm"
+	}
+
+	dataRecord["data"] = data
+
+	records = append(records, dataRecord)
 
 	return records, nil
 }
@@ -198,10 +337,14 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 		log.Println("done")
 	} else {
 		if *globals.ImportService == "leanplumS3ToCT" {
-			//batch size of 600 for leanplum data
-			ctBatchSize = 600
+			//batch size of 200 for leanplum data
+			ctBatchSize = 200
 			var wg sync.WaitGroup
-			batchAndSend(done, processRecordForUpload(done, leanplumRecordsFromS3Generator(done)), &wg)
+			apiConcurrency = 9
+			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
+			batchAndSendToCTAPI(done, processAPIRecordForUpload(done, apiUploadRecordStream), &wg)
+			sendToCTSDK("https://wzrkt.com/a1?os=iOS", done, processSDKRecordForUpload(done, iosSDKRecordStream), &wg)
+			sendToCTSDK("https://wzrkt.com/a1?os=android", done, processSDKRecordForUpload(done, androidSDKRecordStream), &wg)
 			wg.Wait()
 			log.Println("done")
 			log.Printf("Data Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
@@ -232,7 +375,8 @@ func getJobID(startDate, endDate string) string {
 	return jobID
 }
 
-func processFile(contentKey string, leanplumRecordStream chan<- recordInfo, done chan interface{}) bool {
+func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUploadRecordInfo,
+	leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream chan<- sdkUploadRecordInfo, done chan interface{}) bool {
 	creds := credentials.NewStaticCredentials(s3AccessId,
 		s3SecretKey, "")
 
@@ -270,7 +414,21 @@ func processFile(contentKey string, leanplumRecordStream chan<- recordInfo, done
 				select {
 				case <-done:
 					return false
-				case leanplumRecordStream <- info:
+				case leanplumAPIUploadRecordStream <- info:
+				}
+				if info.SystemName == "iOS" || info.SystemName == "iPhone OS" {
+					select {
+					case <-done:
+						return false
+					case leanplumSDKIOSRecordStream <- info:
+					}
+				}
+				if info.SystemName == "Android OS" {
+					select {
+					case <-done:
+						return false
+					case leanplumSDKAndroidRecordStream <- info:
+					}
 				}
 			}
 			if err := scanner.Err(); err != nil {
@@ -306,10 +464,16 @@ func processFile(contentKey string, leanplumRecordStream chan<- recordInfo, done
 }
 
 //getting data from S3
-func leanplumRecordsFromS3Generator(done chan interface{}) <-chan recordInfo {
-	leanplumRecordStream := make(chan recordInfo)
+func leanplumRecordsFromS3Generator(done chan interface{}) (<-chan apiUploadRecordInfo, <-chan sdkUploadRecordInfo, <-chan sdkUploadRecordInfo) {
+	leanplumAPIUploadRecordStream := make(chan apiUploadRecordInfo)
+	leanplumSDKIOSRecordStream := make(chan sdkUploadRecordInfo)
+	leanplumSDKAndroidRecordStream := make(chan sdkUploadRecordInfo)
 	go func() {
-		defer close(leanplumRecordStream)
+		defer func() {
+			close(leanplumAPIUploadRecordStream)
+			close(leanplumSDKIOSRecordStream)
+			close(leanplumSDKAndroidRecordStream)
+		}()
 
 		file, err := os.Open(generatedFilesFile)
 		if err != nil {
@@ -324,7 +488,8 @@ func leanplumRecordsFromS3Generator(done chan interface{}) <-chan recordInfo {
 			contentKey := scanner.Text()
 			contentKey = strings.Trim(contentKey, " \n \r")
 			log.Println("Processing data from: " + contentKey)
-			success := processFile(contentKey, leanplumRecordStream, done)
+			success := processFile(contentKey, leanplumAPIUploadRecordStream, leanplumSDKIOSRecordStream,
+				leanplumSDKAndroidRecordStream, done)
 			if !success {
 				return
 			}
@@ -333,7 +498,7 @@ func leanplumRecordsFromS3Generator(done chan interface{}) <-chan recordInfo {
 			log.Fatal(err)
 		}
 	}()
-	return leanplumRecordStream
+	return leanplumAPIUploadRecordStream, leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream
 }
 
 var lpCredError = errors.New("Error: Please check your LeanPlum or S3 credentials")
@@ -376,10 +541,10 @@ func pushDataForStartEndDate(startDate, endDate string) ([]s3CopyEntryInfo, erro
 }
 
 //saving to S3 Throttled
-func leanplumRecordsToS3GeneratorThrottled(done chan interface{}) <-chan recordInfo {
+func leanplumRecordsToS3GeneratorThrottled(done chan interface{}) <-chan apiUploadRecordInfo {
 	var wg sync.WaitGroup
 	wg.Add(1)
-	leanplumRecordStream := make(chan recordInfo)
+	leanplumRecordStream := make(chan apiUploadRecordInfo)
 	go func() {
 		defer func() {
 			close(leanplumRecordStream)
@@ -445,10 +610,10 @@ func leanplumRecordsToS3GeneratorThrottled(done chan interface{}) <-chan recordI
 }
 
 //saving to S3
-func leanplumRecordsToS3Generator(done chan interface{}) <-chan recordInfo {
+func leanplumRecordsToS3Generator(done chan interface{}) <-chan apiUploadRecordInfo {
 	var wg sync.WaitGroup
 	wg.Add(1)
-	leanplumRecordStream := make(chan recordInfo)
+	leanplumRecordStream := make(chan apiUploadRecordInfo)
 	go func() {
 		defer func() {
 			close(leanplumRecordStream)

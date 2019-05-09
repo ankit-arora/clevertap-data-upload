@@ -17,8 +17,10 @@ import (
 
 const (
 	uploadEndpoint = "api.clevertap.com/1/upload"
-	concurrency    = 3
 )
+
+var apiConcurrency = 3
+var sdkConcurrency = 9
 
 var ctBatchSize = 1000
 
@@ -31,7 +33,7 @@ func (u *uploadEventsProfilesFromCSVCommand) Execute() {
 	done := make(chan interface{})
 
 	var wg sync.WaitGroup
-	batchAndSend(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
+	batchAndSendToCTAPI(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
 	wg.Wait()
 
 	log.Println("done")
@@ -41,45 +43,6 @@ func (u *uploadEventsProfilesFromCSVCommand) Execute() {
 		log.Printf("Profiles Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
 	} else {
 		log.Printf("Events Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
-	}
-}
-
-func batchAndSend(done <-chan interface{}, recordStream <-chan interface{}, wg *sync.WaitGroup) {
-	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			region := ""
-			if *globals.Region == "in" {
-				region = "in."
-			}
-			var dataSlice []interface{}
-			for e := range recordStream {
-				select {
-				case <-done:
-					return
-				default:
-					dataSlice = append(dataSlice, e)
-					if len(dataSlice) == ctBatchSize {
-						p := make(map[string]interface{})
-						p["d"] = dataSlice
-						sendData(p, "https://"+region+uploadEndpoint)
-						dataSlice = nil
-					}
-				}
-			}
-			if len(dataSlice) > 0 {
-				select {
-				case <-done:
-					return
-				default:
-					p := make(map[string]interface{})
-					p["d"] = dataSlice
-					sendData(p, "https://"+region+uploadEndpoint)
-					dataSlice = nil
-				}
-			}
-		}()
 	}
 }
 
