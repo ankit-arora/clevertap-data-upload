@@ -311,6 +311,9 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 	s3BucketName = *globals.S3Bucket
 	s3RegionName = *globals.AWSRegion
 	s3ObjectPrefix = *globals.AccountID + "-" + startDate + "-" + endDate + "/"
+	if _, err := os.Stat(*globals.LeanplumOutFilesPath); os.IsNotExist(err) {
+		err = os.MkdirAll(*globals.LeanplumOutFilesPath, os.ModePerm)
+	}
 	if !strings.HasSuffix(*globals.LeanplumOutFilesPath, "/") {
 		*globals.LeanplumOutFilesPath = *globals.LeanplumOutFilesPath + "/"
 	}
