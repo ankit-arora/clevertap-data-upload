@@ -20,7 +20,7 @@ const (
 )
 
 var apiConcurrency = 3
-var sdkConcurrency = 36
+var sdkConcurrency = 60
 
 var ctBatchSize = 1000
 
