@@ -386,70 +386,69 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 
 	signer := v4.NewSigner(creds)
 
+	processedLineCount := 0
+
 	for {
 		req, body, err := buildRequest("s3", s3RegionName, s3BucketName,
 			contentKey, "")
-		if err != nil {
-			log.Fatal(err)
-			select {
-			case <-done:
-				return false
-			default:
-				done <- struct{}{}
-				return false
-			}
+		for err != nil {
+			log.Printf("Error while building S3 request for %v: %v\n ", contentKey, err)
+			log.Println("Retrying after 20 seconds")
+			time.Sleep(20 * time.Second)
+			req, body, err = buildRequest("s3", s3RegionName, s3BucketName,
+				contentKey, "")
 		}
 		signer.Sign(req, body, "s3", s3RegionName, time.Now())
-		client := &http.Client{}
+		client := &http.Client{Timeout: time.Minute * 240}
 		resp, err := client.Do(req)
 		if err == nil && resp.StatusCode < 300 {
 			scanner := bufio.NewScanner(resp.Body)
 			buf := make([]byte, 0, 64*1024)
 			scanner.Buffer(buf, 20*1024*1024)
 			scanner.Split(ScanCRLF)
+			i := 0
 			for scanner.Scan() {
-				s := scanner.Text()
-				s = strings.Trim(s, " \n \r")
-				info := &leanplumRecordInfo{}
-				err = json.Unmarshal([]byte(s), info)
-				//fmt.Printf("\nline: %v\n", s)
-				//customAttributes := info.Events[0].Data["custom_attributes"].(map[string]interface{})
-				//fmt.Println("user id: ", info.UserId)
-				select {
-				case <-done:
-					return false
-				case leanplumAPIUploadRecordStream <- info:
-				}
-				if info.SystemName == "iOS" || info.SystemName == "iPhone OS" {
+				i += 1
+				if i > processedLineCount {
+					s := scanner.Text()
+					s = strings.Trim(s, " \n \r")
+					info := &leanplumRecordInfo{}
+					err = json.Unmarshal([]byte(s), info)
 					select {
 					case <-done:
 						return false
-					case leanplumSDKIOSRecordStream <- info:
+					case leanplumAPIUploadRecordStream <- info:
 					}
-				}
-				if info.SystemName == "Android OS" {
-					select {
-					case <-done:
-						return false
-					case leanplumSDKAndroidRecordStream <- info:
+					if info.SystemName == "iOS" || info.SystemName == "iPhone OS" {
+						select {
+						case <-done:
+							return false
+						case leanplumSDKIOSRecordStream <- info:
+						}
 					}
+					if info.SystemName == "Android OS" {
+						select {
+						case <-done:
+							return false
+						case leanplumSDKAndroidRecordStream <- info:
+						}
+					}
+					processedLineCount++
 				}
 			}
+
 			if err := scanner.Err(); err != nil {
-				log.Fatal(err)
-				select {
-				case <-done:
-					return false
-				default:
-					done <- struct{}{}
-					return false
+				log.Printf("Error while getting data from S3 for %v: %v\n ", contentKey, err)
+				log.Println("Retrying after 20 seconds")
+				if resp != nil {
+					resp.Body.Close()
 				}
+				time.Sleep(20 * time.Second)
+				continue
 			}
 
 			resp.Body.Close()
-
 			break
-
 		}
 		if err != nil {
 			log.Println("Error while fetching events data from S3 ", err)
