@@ -344,7 +344,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			ctBatchSize = 400
 			var wg sync.WaitGroup
 			apiConcurrency = 9
-			sdkConcurrency = 60
+			sdkConcurrency = 400
 			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
 			batchAndSendToCTAPI(done, processAPIRecordForUpload(done, apiUploadRecordStream), &wg)
 			sendToCTSDK("https://wzrkt.com/a1?os=iOS", done, processSDKRecordForUpload(done, iosSDKRecordStream), &wg)
@@ -393,8 +393,8 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 			contentKey, "")
 		for err != nil {
 			log.Printf("Error while building S3 request for %v: %v\n ", contentKey, err)
-			log.Println("Retrying after 20 seconds")
-			time.Sleep(20 * time.Second)
+			log.Println("Retrying after 5 seconds")
+			time.Sleep(5 * time.Second)
 			req, body, err = buildRequest("s3", s3RegionName, s3BucketName,
 				contentKey, "")
 		}
@@ -439,11 +439,11 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 
 			if err := scanner.Err(); err != nil {
 				log.Printf("Error while getting data from S3 for %v: %v\n ", contentKey, err)
-				log.Println("Retrying after 20 seconds")
+				log.Println("Retrying after 5 seconds")
 				if resp != nil {
 					resp.Body.Close()
 				}
-				time.Sleep(20 * time.Second)
+				time.Sleep(5 * time.Second)
 				continue
 			}
 
@@ -452,16 +452,16 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 		}
 		if err != nil {
 			log.Println("Error while fetching events data from S3 ", err)
-			log.Printf("retrying after 20 seconds for contentKey: %v", contentKey)
+			log.Printf("retrying after 5 seconds for contentKey: %v", contentKey)
 		} else {
 			body, _ := ioutil.ReadAll(resp.Body)
 			log.Println("response body: ", string(body))
-			log.Printf("retrying after 20 seconds for contentKey: %v", contentKey)
+			log.Printf("retrying after 5 seconds for contentKey: %v", contentKey)
 		}
 		if resp != nil {
 			resp.Body.Close()
 		}
-		time.Sleep(20 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 	return true
 }

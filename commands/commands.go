@@ -207,17 +207,17 @@ func sendDataToCTAPI(payload map[string]interface{}, endpoint string) (string, e
 
 		if err != nil {
 			log.Println("Error", err)
-			log.Println("retrying after 20 seconds")
+			log.Println("retrying after 5 seconds")
 		} else {
 			//body, _ := ioutil.ReadAll(resp.Body)
 			log.Println("response body: ", string(body))
-			log.Println("response body: ", "retrying for payload after 20 seconds: ")
+			log.Println("response body: ", "retrying for payload after 5 seconds: ")
 			json.NewEncoder(os.Stdout).Encode(payload)
 		}
 		if resp != nil {
 			resp.Body.Close()
 		}
-		time.Sleep(20 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -294,17 +294,17 @@ func sendDataToCTSDK(payload []map[string]interface{}, endpoint string) (string,
 
 		if err != nil {
 			log.Println("Error", err)
-			log.Println("retrying after 20 seconds")
+			log.Println("retrying after 5 seconds")
 		} else {
 			//status code >= 500
 			log.Println("response body: ", string(body))
-			log.Println("response body: ", "retrying for payload after 20 seconds: ")
+			log.Println("response body: ", "retrying for payload after 5 seconds: ")
 			json.NewEncoder(os.Stdout).Encode(payload)
 		}
 		if resp != nil {
 			resp.Body.Close()
 		}
-		time.Sleep(20 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
 
