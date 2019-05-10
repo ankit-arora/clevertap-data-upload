@@ -344,7 +344,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			ctBatchSize = 400
 			var wg sync.WaitGroup
 			apiConcurrency = 9
-			sdkConcurrency = ctBatchSize * apiConcurrency
+			sdkConcurrency = 120
 			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
 			batchAndSendToCTAPI(done, processAPIRecordForUpload(done, apiUploadRecordStream), &wg)
 			sendToCTSDK("https://wzrkt.com/a1?os=iOS", done, processSDKRecordForUpload(done, iosSDKRecordStream), &wg)
