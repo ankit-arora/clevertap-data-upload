@@ -344,7 +344,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			ctBatchSize = 400
 			var wg sync.WaitGroup
 			apiConcurrency = 9
-			sdkConcurrency = 120
+			sdkConcurrency = 500
 			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
 			batchAndSendToCTAPI(done, processAPIRecordForUpload(done, apiUploadRecordStream), &wg)
 			sendToCTSDK("https://wzrkt.com/a1?os=iOS", done, processSDKRecordForUpload(done, iosSDKRecordStream), &wg)
@@ -379,10 +379,94 @@ func getJobID(startDate, endDate string) string {
 	return jobID
 }
 
+func getLinesFromS3File(scanner *bufio.Scanner) (<-chan string, <-chan error) {
+	s3LineChannel := make(chan string)
+	scanErrorChannel := make(chan error)
+	go func(innerScanner *bufio.Scanner) {
+		defer func() {
+			close(scanErrorChannel)
+		}()
+		for innerScanner.Scan() {
+			s3LineChannel <- innerScanner.Text()
+		}
+		close(s3LineChannel)
+		if err := innerScanner.Err(); err != nil {
+			scanErrorChannel <- err
+		}
+	}(scanner)
+	return s3LineChannel, scanErrorChannel
+}
+
+func putLinesFromS3InStream(s3LineChannel <-chan string, scanErrorChannel <-chan error,
+	leanplumAPIUploadRecordStream chan<- apiUploadRecordInfo,
+	leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream chan<- sdkUploadRecordInfo,
+	done chan interface{}, processedLineCount *int) (error, bool) {
+	var scanErr error = nil
+	i := 0
+	log.Printf("Processed Count for file: %v", *processedLineCount)
+	for {
+		t := time.NewTimer(30 * time.Second)
+		select {
+		case s, lineChannelNotClosed := <-s3LineChannel:
+			if !lineChannelNotClosed {
+				//scanner has stopped sending lines, done reading the entire file from S3
+				//now check for errors
+				err, errChannelNotClosed := <-scanErrorChannel
+				if errChannelNotClosed {
+					//err could be present
+					if err != nil {
+						scanErr = err
+					}
+				}
+				if !t.Stop() {
+					<-t.C
+				}
+				return scanErr, true
+			}
+			i += 1
+			if i > *processedLineCount {
+				s = strings.Trim(s, " \n \r")
+				info := &leanplumRecordInfo{}
+				jsonParseError := json.Unmarshal([]byte(s), info)
+				if jsonParseError == nil {
+					//json parsed correctly ignore line otherwise
+					select {
+					case <-done:
+						return nil, false
+					case leanplumAPIUploadRecordStream <- info:
+					}
+					if info.SystemName == "iOS" || info.SystemName == "iPhone OS" {
+						select {
+						case <-done:
+							return nil, false
+						case leanplumSDKIOSRecordStream <- info:
+						}
+					}
+					if info.SystemName == "Android OS" {
+						select {
+						case <-done:
+							return nil, false
+						case leanplumSDKAndroidRecordStream <- info:
+						}
+					}
+				}
+				*processedLineCount++
+			}
+		case <-t.C:
+			//timed out reading from S3 file
+			scanErr = errors.New("Timed out reading from S3 file")
+			return scanErr, true
+		}
+		if !t.Stop() {
+			<-t.C
+		}
+	}
+}
+
 func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUploadRecordInfo,
 	leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream chan<- sdkUploadRecordInfo, done chan interface{}) bool {
-	creds := credentials.NewStaticCredentials(s3AccessId,
-		s3SecretKey, "")
+
+	creds := credentials.NewStaticCredentials(s3AccessId, s3SecretKey, "")
 
 	signer := v4.NewSigner(creds)
 
@@ -406,39 +490,17 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 			buf := make([]byte, 0, 64*1024)
 			scanner.Buffer(buf, 20*1024*1024)
 			scanner.Split(ScanCRLF)
-			i := 0
-			for scanner.Scan() {
-				i += 1
-				if i > processedLineCount {
-					s := scanner.Text()
-					s = strings.Trim(s, " \n \r")
-					info := &leanplumRecordInfo{}
-					err = json.Unmarshal([]byte(s), info)
-					select {
-					case <-done:
-						return false
-					case leanplumAPIUploadRecordStream <- info:
-					}
-					if info.SystemName == "iOS" || info.SystemName == "iPhone OS" {
-						select {
-						case <-done:
-							return false
-						case leanplumSDKIOSRecordStream <- info:
-						}
-					}
-					if info.SystemName == "Android OS" {
-						select {
-						case <-done:
-							return false
-						case leanplumSDKAndroidRecordStream <- info:
-						}
-					}
-					processedLineCount++
-				}
+			s3LineChannel, scanErrorChannel := getLinesFromS3File(scanner)
+			scanErr, shouldContinue := putLinesFromS3InStream(s3LineChannel, scanErrorChannel,
+				leanplumAPIUploadRecordStream, leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream, done,
+				&processedLineCount)
+
+			if !shouldContinue {
+				return false
 			}
 
-			if err := scanner.Err(); err != nil {
-				log.Printf("Error while getting data from S3 for %v: %v\n ", contentKey, err)
+			if scanErr != nil {
+				log.Printf("Error while getting data from S3 for %v: %v : %v\n ", contentKey, scanErr, processedLineCount)
 				log.Println("Retrying after 5 seconds")
 				if resp != nil {
 					resp.Body.Close()
@@ -480,6 +542,7 @@ func leanplumRecordsFromS3Generator(done chan interface{}) (<-chan apiUploadReco
 
 		file, err := os.Open(generatedFilesFile)
 		if err != nil {
+			log.Fatal("Error reading file: ", err)
 			return
 		}
 		defer file.Close()
