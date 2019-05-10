@@ -150,7 +150,7 @@ func sendDataToCTAPI(payload map[string]interface{}, endpoint string) (string, e
 		return "", nil
 	}
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: time.Minute * 1}
 	for {
 		b := &bytes.Buffer{}
 		json.NewEncoder(b).Encode(payload)
@@ -267,7 +267,7 @@ func sendDataToCTSDK(payload []map[string]interface{}, endpoint string) (string,
 		return "", nil
 	}
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: time.Minute * 1}
 	for {
 		b := &bytes.Buffer{}
 		json.NewEncoder(b).Encode(payload)
