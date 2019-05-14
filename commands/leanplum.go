@@ -379,25 +379,26 @@ func getJobID(startDate, endDate string) string {
 	return jobID
 }
 
-func getLinesFromS3File(scanner *bufio.Scanner) (<-chan string, <-chan error) {
-	s3LineChannel := make(chan string)
-	scanErrorChannel := make(chan error)
-	go func(innerScanner *bufio.Scanner) {
-		defer func() {
-			close(scanErrorChannel)
-		}()
-		for innerScanner.Scan() {
-			s3LineChannel <- innerScanner.Text()
-		}
-		close(s3LineChannel)
-		if err := innerScanner.Err(); err != nil {
-			scanErrorChannel <- err
-		}
-	}(scanner)
-	return s3LineChannel, scanErrorChannel
+type s3Line struct {
+	line    string
+	scanErr error
 }
 
-func putLinesFromS3InStream(s3LineChannel <-chan string, scanErrorChannel <-chan error,
+func getLinesFromS3File(scanner *bufio.Scanner) <-chan s3Line {
+	s3LineChannel := make(chan s3Line)
+	go func(innerScanner *bufio.Scanner) {
+		defer close(s3LineChannel)
+		for innerScanner.Scan() {
+			s3LineChannel <- s3Line{line: innerScanner.Text(), scanErr: nil}
+		}
+		if err := innerScanner.Err(); err != nil {
+			s3LineChannel <- s3Line{line: "", scanErr: err}
+		}
+	}(scanner)
+	return s3LineChannel
+}
+
+func putLinesFromS3InStream(s3LineChannel <-chan s3Line,
 	leanplumAPIUploadRecordStream chan<- apiUploadRecordInfo,
 	leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream chan<- sdkUploadRecordInfo,
 	done chan interface{}, processedLineCount *int) (error, bool) {
@@ -407,22 +408,16 @@ func putLinesFromS3InStream(s3LineChannel <-chan string, scanErrorChannel <-chan
 	for {
 		t := time.NewTimer(30 * time.Second)
 		select {
-		case s, lineChannelNotClosed := <-s3LineChannel:
-			if !lineChannelNotClosed {
-				//scanner has stopped sending lines, done reading the entire file from S3
-				//now check for errors
-				err, errChannelNotClosed := <-scanErrorChannel
-				if errChannelNotClosed {
-					//err could be present
-					if err != nil {
-						scanErr = err
-					}
-				}
+		case lineFromS3, lineChannelNotClosed := <-s3LineChannel:
+			scanErr = lineFromS3.scanErr
+			if !lineChannelNotClosed || scanErr != nil {
+				//error exists or channel has closed and scanner has stopped sending lines, done reading the entire file from S3
 				if !t.Stop() {
 					<-t.C
 				}
 				return scanErr, true
 			}
+			s := lineFromS3.line
 			i += 1
 			if i > *processedLineCount {
 				s = strings.Trim(s, " \n \r")
@@ -490,8 +485,8 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 			buf := make([]byte, 0, 64*1024)
 			scanner.Buffer(buf, 20*1024*1024)
 			scanner.Split(ScanCRLF)
-			s3LineChannel, scanErrorChannel := getLinesFromS3File(scanner)
-			scanErr, shouldContinue := putLinesFromS3InStream(s3LineChannel, scanErrorChannel,
+			s3LineChannel := getLinesFromS3File(scanner)
+			scanErr, shouldContinue := putLinesFromS3InStream(s3LineChannel,
 				leanplumAPIUploadRecordStream, leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream, done,
 				&processedLineCount)
 
