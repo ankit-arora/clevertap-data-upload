@@ -144,6 +144,24 @@ var Summary = struct {
 	mpParseErrorResponses: make([]string, 0),
 }
 
+const (
+	MaxIdleConnections int = 20
+	RequestTimeout     int = 1
+)
+
+func createHTTPClient() *http.Client {
+	client := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: MaxIdleConnections,
+		},
+		Timeout: time.Duration(RequestTimeout) * time.Minute,
+	}
+
+	return client
+}
+
+var ctHTTPClient = createHTTPClient()
+
 func sendDataToCTAPI(payload map[string]interface{}, endpoint string) (string, error) {
 
 	if *globals.DryRun {
@@ -151,7 +169,6 @@ func sendDataToCTAPI(payload map[string]interface{}, endpoint string) (string, e
 		return "", nil
 	}
 
-	client := &http.Client{Timeout: time.Minute * 1}
 	for {
 		b := &bytes.Buffer{}
 		json.NewEncoder(b).Encode(payload)
@@ -166,7 +183,7 @@ func sendDataToCTAPI(payload map[string]interface{}, endpoint string) (string, e
 		req.Header.Add("X-CleverTap-Account-Id", *globals.AccountID)
 		req.Header.Add("X-CleverTap-Passcode", *globals.AccountPasscode)
 
-		resp, err := client.Do(req)
+		resp, err := ctHTTPClient.Do(req)
 		retry := false
 		var body []byte
 		if err == nil {
@@ -207,6 +224,9 @@ func sendDataToCTAPI(payload map[string]interface{}, endpoint string) (string, e
 		}
 
 		if err != nil {
+			if resp != nil {
+				ioutil.ReadAll(resp.Body)
+			}
 			log.Println("Error", err)
 			log.Println("retrying after 5 seconds")
 		} else {
@@ -268,7 +288,6 @@ func sendDataToCTSDK(payload []map[string]interface{}, endpoint string) (string,
 		return "", nil
 	}
 
-	client := &http.Client{Timeout: time.Minute * 1}
 	for {
 		b := &bytes.Buffer{}
 		json.NewEncoder(b).Encode(payload)
@@ -279,7 +298,7 @@ func sendDataToCTSDK(payload []map[string]interface{}, endpoint string) (string,
 			return "", err
 		}
 
-		resp, err := client.Do(req)
+		resp, err := ctHTTPClient.Do(req)
 
 		var body []byte
 		if err == nil {
@@ -294,6 +313,9 @@ func sendDataToCTSDK(payload []map[string]interface{}, endpoint string) (string,
 		}
 
 		if err != nil {
+			if resp != nil {
+				ioutil.ReadAll(resp.Body)
+			}
 			log.Println("Error", err)
 			log.Println("retrying after 5 seconds")
 		} else {
