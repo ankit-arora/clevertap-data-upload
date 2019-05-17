@@ -109,8 +109,18 @@ type leanplumRecordInfo struct {
 	UserAttributes        map[string]interface{} `json:"userAttributes,omitempty"`
 }
 
-func (l *leanplumRecordInfo) convertToCTAPIFormat() ([]interface{}, error) {
+var euDropCount = 0
+
+func (l leanplumRecordInfo) convertToCTAPIFormat() ([]interface{}, error) {
 	records := make([]interface{}, 0)
+	if l.Country != "" {
+		_, ok := europeCountryCodeSet[strings.ToLower(l.Country)]
+		if ok {
+			//user from Europe
+			euDropCount++
+			return records, nil
+		}
+	}
 	identity := l.UserId
 	objectID := l.getObjectID()
 	if identity == "" && objectID == "" {
@@ -158,7 +168,7 @@ func (l *leanplumRecordInfo) convertToCTAPIFormat() ([]interface{}, error) {
 	return records, nil
 }
 
-func (l *leanplumRecordInfo) getObjectID() string {
+func (l leanplumRecordInfo) getObjectID() string {
 	objectID := ""
 	if l.UserAttributes != nil {
 		systemName := l.SystemName
@@ -217,10 +227,18 @@ func (l *leanplumRecordInfo) getObjectID() string {
 ]
 */
 
-func (l *leanplumRecordInfo) convertToCTSDKFormat() ([]map[string]interface{}, error) {
+func (l leanplumRecordInfo) convertToCTSDKFormat() ([]map[string]interface{}, error) {
 	objectID := l.getObjectID()
 	if objectID == "" || l.AppVersion == "" || l.DeviceModel == "" || l.SystemVersion == "" {
 		return nil, nil
+	}
+
+	if l.Country != "" {
+		_, ok := europeCountryCodeSet[strings.ToLower(l.Country)]
+		if ok {
+			//user from Europe
+			return nil, nil
+		}
 	}
 
 	records := make([]map[string]interface{}, 0)
@@ -279,7 +297,7 @@ func (l *leanplumRecordInfo) convertToCTSDKFormat() ([]map[string]interface{}, e
 	return records, nil
 }
 
-func (p *leanplumRecordInfo) print() {
+func (p leanplumRecordInfo) print() {
 	//log.Printf("First Result: %v", p.Results[0])
 	//log.Printf("Results size: %v", len(p.Results))
 }
@@ -301,6 +319,8 @@ var (
 	lpClientKey        string
 	leanplumExportEP   = "https://www.leanplum.com/api"
 )
+
+var europeCountryCodeSet map[string]bool
 
 func (u *uploadRecordsFromLeanplum) Execute() {
 	log.Println("started")
@@ -345,6 +365,14 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			var wg sync.WaitGroup
 			apiConcurrency = 9
 			sdkConcurrency = 500
+			europeCountryCodesJSON := "{\"ad\":true,\"al\":true,\"am\":true,\"at\":true,\"az\":true,\"ba\":true," +
+				"\"be\":true,\"bg\":true,\"by\":true,\"ch\":true,\"cy\":true,\"cz\":true,\"de\":true,\"dk\":true," +
+				"\"ee\":true,\"es\":true,\"fi\":true,\"fr\":true,\"gb\":true,\"ge\":true,\"gr\":true,\"hr\":true," +
+				"\"hu\":true,\"ie\":true,\"is\":true,\"it\":true,\"li\":true,\"lt\":true,\"lu\":true,\"lv\":true," +
+				"\"mc\":true,\"md\":true,\"me\":true,\"mk\":true,\"mt\":true,\"nl\":true,\"no\":true,\"pl\":true," +
+				"\"pt\":true,\"ro\":true,\"rs\":true,\"se\":true,\"si\":true,\"sk\":true,\"sm\":true,\"ua\":true," +
+				"\"va\":true}"
+			_ = json.Unmarshal([]byte(europeCountryCodesJSON), &europeCountryCodeSet)
 			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
 			batchAndSendToCTAPI(done, processAPIRecordForUpload(done, apiUploadRecordStream), &wg)
 			sendToCTSDK("https://wzrkt.com/a1?os=iOS", done, processSDKRecordForUpload(done, iosSDKRecordStream), &wg)
@@ -352,6 +380,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			wg.Wait()
 			log.Println("done")
 			log.Printf("Data Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+			log.Printf("Number of session records dropped from Europe: %v", euDropCount)
 		}
 	}
 }

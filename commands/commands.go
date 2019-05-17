@@ -71,12 +71,13 @@ func processSDKRecordForUpload(done chan interface{}, inputRecordStream <-chan s
 				}
 			}
 
-			select {
-			case <-done:
-				return
-			case convertedRecordStream <- ctRecords:
+			if ctRecords != nil {
+				select {
+				case <-done:
+					return
+				case convertedRecordStream <- ctRecords:
+				}
 			}
-
 		}
 	}()
 	return convertedRecordStream
