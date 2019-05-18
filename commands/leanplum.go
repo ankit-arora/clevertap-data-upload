@@ -371,7 +371,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			ctBatchSize = 400
 			var wg sync.WaitGroup
 			apiConcurrency = 9
-			sdkConcurrency = 500
+			sdkConcurrency = 1000
 
 			europeCountryCodesJSON := "{\"ad\":true,\"al\":true,\"am\":true,\"at\":true,\"az\":true,\"ba\":true," +
 				"\"be\":true,\"bg\":true,\"by\":true,\"ch\":true,\"cy\":true,\"cz\":true,\"de\":true,\"dk\":true," +
