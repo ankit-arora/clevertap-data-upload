@@ -149,19 +149,26 @@ func (l leanplumRecordInfo) convertToCTAPIFormat() ([]interface{}, error) {
 
 	for i := 0; i < len(l.States); i++ {
 		for j := 0; j < len(l.States[i].Events); j++ {
-			eventRecord := make(map[string]interface{})
-			eventRecord["type"] = "event"
-			if l.States[i].Events[j].Parameters != nil {
-				eventRecord["evtData"] = l.States[i].Events[j].Parameters
+			eventName := l.States[i].Events[j].Name
+			if eventName != "" {
+				_, ok := eventsSet[eventName]
+				if ok {
+					//should add event
+					eventRecord := make(map[string]interface{})
+					eventRecord["evtName"] = eventName
+					eventRecord["type"] = "event"
+					if l.States[i].Events[j].Parameters != nil {
+						eventRecord["evtData"] = l.States[i].Events[j].Parameters
+					}
+					eventRecord["ts"] = int(l.States[i].Events[j].Time)
+					if objectID != "" {
+						eventRecord["objectId"] = objectID
+					} else {
+						eventRecord["identity"] = identity
+					}
+					records = append(records, eventRecord)
+				}
 			}
-			eventRecord["ts"] = int(l.States[i].Events[j].Time)
-			eventRecord["evtName"] = l.States[i].Events[j].Name
-			if objectID != "" {
-				eventRecord["objectId"] = objectID
-			} else {
-				eventRecord["identity"] = identity
-			}
-			records = append(records, eventRecord)
 		}
 	}
 
@@ -320,7 +327,7 @@ var (
 	leanplumExportEP   = "https://www.leanplum.com/api"
 )
 
-var europeCountryCodeSet map[string]bool
+var europeCountryCodeSet, eventsSet map[string]bool
 
 func (u *uploadRecordsFromLeanplum) Execute() {
 	log.Println("started")
@@ -365,6 +372,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			var wg sync.WaitGroup
 			apiConcurrency = 9
 			sdkConcurrency = 500
+
 			europeCountryCodesJSON := "{\"ad\":true,\"al\":true,\"am\":true,\"at\":true,\"az\":true,\"ba\":true," +
 				"\"be\":true,\"bg\":true,\"by\":true,\"ch\":true,\"cy\":true,\"cz\":true,\"de\":true,\"dk\":true," +
 				"\"ee\":true,\"es\":true,\"fi\":true,\"fr\":true,\"gb\":true,\"ge\":true,\"gr\":true,\"hr\":true," +
@@ -373,6 +381,53 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 				"\"pt\":true,\"ro\":true,\"rs\":true,\"se\":true,\"si\":true,\"sk\":true,\"sm\":true,\"ua\":true," +
 				"\"va\":true}"
 			_ = json.Unmarshal([]byte(europeCountryCodesJSON), &europeCountryCodeSet)
+
+			eventsJSON := "{\"Purchase\":true,\"Uninstall\":true,\"banner_ad_fill_success\":true," +
+				"\"banner_ad_requested\":true,\"capability_3d\":true,\"cart_item_added\":true,\"cart_items\":true," +
+				"\"cart_items_selected_at_checkout\":true,\"cart_items_tried_on\":true,\"cart_opened\":true," +
+				"\"cart_pip_opened_or_closed\":true,\"cart_scene_loaded\":true,\"cart_share_sheet_item_selected\":true," +
+				"\"cart_swipe_to_remove\":true,\"cart_tap_options_menu\":true,\"change_look\":true," +
+				"\"chat_3d_scene_load_time\":true,\"chat_scene_loaded\":true,\"dashboard_tap_avatar\":true," +
+				"\"device_on_landscape\":true,\"device_on_portrait\":true,\"device_orientation\":true," +
+				"\"did_accept_friend_request\":true,\"did_add_product_to_wishlist\":true,\"did_change_room_settings\":true," +
+				"\"did_change_room_type\":true,\"did_decline_friend_request\":true,\"did_send_threaded_message\":true," +
+				"\"did_show_room_settings\":true,\"did_show_upsell\":true,\"did_tap_view_all_credit_packages\":true," +
+				"\"failure_load_polaris_library\":true,\"first_purchase_by_new_user_within_7d\":true," +
+				"\"fitting_room_add_to_cart_tapped\":true,\"fitting_room_drop_down_result\":true," +
+				"\"fitting_room_opened\":true,\"fitting_room_swipe_to_remove\":true,\"ftux_acct_created_cant_login\":true," +
+				"\"ftux_continue_with_facebook_immediate_sign_on\":true,\"ftux_new_user_switched_branches\":true," +
+				"\"ftux_pending_var_change_timeout\":true,\"ftux_registration_success\":true," +
+				"\"ftux_show_account_exists\":true,\"ftux_show_landing_page\":true,\"ftux_show_no_account_screen\":true," +
+				"\"ftux_tap_customize\":true,\"ftux_tap_join_now\":true,\"ftux_tap_no_imvu_account_fb_regstart\":true," +
+				"\"ftux_tap_regstart\":true,\"ftux_tap_save_your_look\":true,\"ftux_tap_select_clothing\":true," +
+				"\"in_app_purchase_delivered\":true,\"in_app_purchase_receipt_rcvd\":true,\"login_success\":true," +
+				"\"meaningful_chat\":true,\"meaningful_chatnow\":true,\"native_ad_request_failed\":true," +
+				"\"native_ad_request_failed_request_count\":true,\"orientation_change_to_landscape\":true," +
+				"\"orientation_change_to_portrait\":true,\"orientation_chat_in_landscape\":true," +
+				"\"orientation_chat_in_portrait\":true,\"photobooth_2d_tap_photo\":true,\"photobooth_3d_tap_photo\":true," +
+				"\"photobooth_shared_own_post\":true,\"photobooth_socialnetwork_postphoto\":true," +
+				"\"photobooth_tap_next\":true,\"photobooth_tap_photo\":true,\"photobooth_tap_postphoto\":true," +
+				"\"photobooth_tap_snapshot\":true,\"purchase_credits\":true,\"purchase_outfit_bundle\":true," +
+				"\"purchase_outfit_bundle_origin\":true,\"purchase_product\":true,\"purchase_product_cancel\":true," +
+				"\"purchase_product_failure\":true,\"purchase_room_bundle\":true,\"save_look\":true," +
+				"\"share_feed_fail\":true,\"share_feed_success\":true,\"share_own_feed_success\":true," +
+				"\"shop_cart_number_of_items\":true,\"shop_cart_tap_item_menu\":true,\"shop_cart_tap_item_menu_view_details\":true," +
+				"\"shop_cart_tap_options_menu\":true,\"shop_cart_tap_options_menu_edit\":true,\"show_login_because_email_from_facebook_exists_on_imvu\":true," +
+				"\"show_outfit_bundle_shop\":true,\"show_room_bundle_shop\":true,\"swipe_daily_spin\":true,\"tap_credit_pill\":true," +
+				"\"tap_daily_spin_mode\":true,\"tap_dashboard_avatar\":true,\"tap_dashboard_tile\":true,\"tap_dashboard_tile_bundle\":true," +
+				"\"tap_dashboard_tile_chat\":true,\"tap_dashboard_tile_create_post\":true,\"tap_dashboard_tile_credits\":true," +
+				"\"tap_dashboard_tile_daily_spin\":true,\"tap_dashboard_tile_dressUp\":true,\"tap_dashboard_tile_dress_up\":true," +
+				"\"tap_dashboard_tile_earn_credits\":true,\"tap_dashboard_tile_feed\":true,\"tap_dashboard_tile_followers\":true," +
+				"\"tap_dashboard_tile_friends\":true,\"tap_dashboard_tile_go_shopping\":true,\"tap_dashboard_tile_invite_friends\":true," +
+				"\"tap_dashboard_tile_outfit_bundle\":true,\"tap_dashboard_tile_room_bundle\":true,\"tap_dashboard_tile_search_people\":true," +
+				"\"tap_dashboard_tile_shop_trends\":true,\"tap_forgot_password\":true,\"tap_login\":true,\"tap_login_start\":true," +
+				"\"tap_outfit_bundle_toast\":true,\"tap_share_feed_details\":true,\"tap_share_feed_home\":true,\"tap_share_feed_profile\":true," +
+				"\"tap_wardrobe_tile_shop\":true,\"user_daily_spin_rewards_credit_count\":true,\"user_daily_spin_rewards_product_count\":true," +
+				"\"user_daily_spin_rewards_stickerpack_count\":true,\"user_favorites_room\":true,\"user_is_on_2d\":true," +
+				"\"user_registration_complete\":true,\"withmoji_sent\":true}"
+
+			_ = json.Unmarshal([]byte(eventsJSON), &eventsSet)
+
 			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
 			batchAndSendToCTAPI(done, processAPIRecordForUpload(done, apiUploadRecordStream), &wg)
 			sendToCTSDK("https://wzrkt.com/a1?os=iOS", done, processSDKRecordForUpload(done, iosSDKRecordStream), &wg)
