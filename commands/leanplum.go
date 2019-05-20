@@ -434,6 +434,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			sendToCTSDK("https://wzrkt.com/a1?os=android", done, processSDKRecordForUpload(done, androidSDKRecordStream), &wg)
 			wg.Wait()
 			log.Println("done")
+			log.Printf("Imported data from Leanplum (S3) to CleverTap for start date: %v and end date: %v\n", startDate, endDate)
 			log.Printf("Total number of essions processed from LeanPlum: %v\n", Summary.sessionsProcessed)
 			log.Printf("Number of session records dropped from Europe: %v", euDropCount)
 		}
