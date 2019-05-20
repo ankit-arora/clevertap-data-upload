@@ -137,10 +137,12 @@ var Summary = struct {
 	sync.Mutex
 	ctProcessed           int64
 	ctUnprocessed         int64
+	sessionsProcessed     int64
 	mpParseErrorResponses []string
 }{
 	ctProcessed:           0,
 	ctUnprocessed:         0,
+	sessionsProcessed:     0,
 	mpParseErrorResponses: make([]string, 0),
 }
 

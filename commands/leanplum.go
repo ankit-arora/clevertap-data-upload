@@ -434,7 +434,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			sendToCTSDK("https://wzrkt.com/a1?os=android", done, processSDKRecordForUpload(done, androidSDKRecordStream), &wg)
 			wg.Wait()
 			log.Println("done")
-			log.Printf("Data Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
+			log.Printf("Total number of essions processed from LeanPlum: %v\n", Summary.sessionsProcessed)
 			log.Printf("Number of session records dropped from Europe: %v", euDropCount)
 		}
 	}
@@ -530,6 +530,7 @@ func putLinesFromS3InStream(s3LineChannel <-chan s3Line,
 					}
 				}
 				*processedLineCount++
+				Summary.sessionsProcessed++
 			}
 		case <-t.C:
 			//timed out reading from S3 file
