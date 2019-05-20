@@ -435,7 +435,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 			wg.Wait()
 			log.Println("done")
 			log.Printf("Imported data from Leanplum (S3) to CleverTap for start date: %v and end date: %v\n", startDate, endDate)
-			log.Printf("Total number of essions processed from LeanPlum: %v\n", Summary.sessionsProcessed)
+			log.Printf("Total number of sessions processed from LeanPlum: %v\n", Summary.sessionsProcessed)
 			log.Printf("Number of session records dropped from Europe: %v", euDropCount)
 		}
 	}
