@@ -322,6 +322,7 @@ var (
 	s3BucketName       string
 	s3RegionName       string
 	generatedFilesFile string
+	statusFile         string
 	lpAppID            string
 	lpClientKey        string
 	leanplumExportEP   = "https://www.leanplum.com/api"
@@ -428,6 +429,7 @@ func (u *uploadRecordsFromLeanplum) Execute() {
 
 			_ = json.Unmarshal([]byte(eventsJSON), &eventsSet)
 
+			statusFile = *globals.LeanplumOutFilesPath + "status-" + startDate + "-" + endDate + ".txt"
 			apiUploadRecordStream, iosSDKRecordStream, androidSDKRecordStream := leanplumRecordsFromS3Generator(done)
 			batchAndSendToCTAPI(done, processAPIRecordForUpload(done, apiUploadRecordStream), &wg)
 			sendToCTSDK("https://wzrkt.com/a1?os=iOS", done, processSDKRecordForUpload(done, iosSDKRecordStream), &wg)
@@ -486,10 +488,10 @@ func getLinesFromS3File(scanner *bufio.Scanner) <-chan s3Line {
 func putLinesFromS3InStream(s3LineChannel <-chan s3Line,
 	leanplumAPIUploadRecordStream chan<- apiUploadRecordInfo,
 	leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream chan<- sdkUploadRecordInfo,
-	done chan interface{}, processedLineCount *int) (error, bool) {
+	done chan interface{}, processedLineCount *int, contentkey string) (error, bool) {
 	var scanErr error = nil
 	i := 0
-	log.Printf("Processed Count for file: %v", *processedLineCount)
+	log.Printf("Processed Count for file: %v : %v\n", contentkey, *processedLineCount)
 	for {
 		t := time.NewTimer(30 * time.Second)
 		select {
@@ -531,6 +533,26 @@ func putLinesFromS3InStream(s3LineChannel <-chan s3Line,
 					}
 				}
 				*processedLineCount++
+				if *processedLineCount%100 == 0 {
+					//can be taken out in a separate goroutine if it's a bottleneck
+					func() {
+						sFile, err := os.OpenFile(statusFile,
+							os.O_WRONLY|os.O_CREATE, 0600)
+						defer sFile.Close()
+						if err != nil {
+							//unable to create status file
+							log.Printf("Error while creating status file %v: %v\n ", statusFile, err)
+						} else {
+							lpFileDoneStatus.ProcessedLine = *processedLineCount
+							lpFileDoneStatus.Name = contentkey
+							statusEncoder := json.NewEncoder(sFile)
+							err = statusEncoder.Encode(&lpFileDoneStatus)
+							if err != nil {
+								log.Printf("Error while writing status to file %v: %v\n ", statusFile, err)
+							}
+						}
+					}()
+				}
 				Summary.sessionsProcessed++
 			}
 		case <-t.C:
@@ -545,13 +567,14 @@ func putLinesFromS3InStream(s3LineChannel <-chan s3Line,
 }
 
 func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUploadRecordInfo,
-	leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream chan<- sdkUploadRecordInfo, done chan interface{}) bool {
+	leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream chan<- sdkUploadRecordInfo, done chan interface{},
+	processedLine int) bool {
 
 	creds := credentials.NewStaticCredentials(s3AccessId, s3SecretKey, "")
 
 	signer := v4.NewSigner(creds)
 
-	processedLineCount := 0
+	processedLineCount := processedLine
 
 	for {
 		req, body, err := buildRequest("s3", s3RegionName, s3BucketName,
@@ -574,7 +597,7 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 			s3LineChannel := getLinesFromS3File(scanner)
 			scanErr, shouldContinue := putLinesFromS3InStream(s3LineChannel,
 				leanplumAPIUploadRecordStream, leanplumSDKIOSRecordStream, leanplumSDKAndroidRecordStream, done,
-				&processedLineCount)
+				&processedLineCount, contentKey)
 
 			if !shouldContinue {
 				return false
@@ -609,6 +632,14 @@ func processFile(contentKey string, leanplumAPIUploadRecordStream chan<- apiUplo
 	return true
 }
 
+var lpFileDoneStatus = struct {
+	Name          string `json:"fileName"`
+	ProcessedLine int    `json:"processedLine"`
+}{
+	Name:          "",
+	ProcessedLine: 0,
+}
+
 //getting data from S3
 func leanplumRecordsFromS3Generator(done chan interface{}) (<-chan apiUploadRecordInfo, <-chan sdkUploadRecordInfo, <-chan sdkUploadRecordInfo) {
 	leanplumAPIUploadRecordStream := make(chan apiUploadRecordInfo)
@@ -627,16 +658,39 @@ func leanplumRecordsFromS3Generator(done chan interface{}) (<-chan apiUploadReco
 			return
 		}
 		defer file.Close()
+		shouldProcessFile := true
+		sFile, err := os.Open(statusFile)
+		if err == nil {
+			statusDecoder := json.NewDecoder(sFile)
+			err = statusDecoder.Decode(&lpFileDoneStatus)
+			if err != nil {
+				log.Fatal("Error parsing status file: "+statusFile, err)
+				return
+			}
+			shouldProcessFile = false
+		}
+		sFile.Close()
+		processedFileName := lpFileDoneStatus.Name
+		processedLine := lpFileDoneStatus.ProcessedLine
 		scanner := bufio.NewScanner(file)
 		buf := make([]byte, 0, 64*1024)
 		scanner.Buffer(buf, 20*1024*1024)
 		scanner.Split(ScanCRLF)
 		for scanner.Scan() {
 			contentKey := scanner.Text()
+			if !shouldProcessFile && processedFileName == contentKey {
+				shouldProcessFile = true
+			}
+			if !shouldProcessFile {
+				continue
+			}
+			if processedFileName != contentKey {
+				processedLine = 0
+			}
 			contentKey = strings.Trim(contentKey, " \n \r")
 			log.Println("Processing data from: " + contentKey)
 			success := processFile(contentKey, leanplumAPIUploadRecordStream, leanplumSDKIOSRecordStream,
-				leanplumSDKAndroidRecordStream, done)
+				leanplumSDKAndroidRecordStream, done, processedLine)
 			if !success {
 				return
 			}
