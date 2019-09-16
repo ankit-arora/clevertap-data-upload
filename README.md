@@ -21,6 +21,14 @@ Arguments:
   -r string                 The account region, either eu or in, defaults to eu (default "eu")
   
   -dryrun                   Do a dry run, process records but do not upload
+
+  -mixpanelSecret           Mixpanel API secret key
+
+  -startDate                Start date for exporting events from Mixpanel <yyyy-mm--dd>
+
+  -endDate                  End date for exporting events <yyyy-mm-dd>
+
+  -startTs                  Start timestamp for events upload in epoch
   
 ```
 
@@ -35,4 +43,16 @@ Example Profiles upload from CSV:
 clevertap-data-upload -csv="/Users/ankit/Documents/in.csv" -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX"
 ```
 
-NOTE:  you must include one of identity, objectId, FBID or GPID, in your data.  Email addresses can serve as an identity value, but the key must be identity.
+NOTE: For CSV uploads, you must include one of identity, objectId, FBID or GPID, in your data.  Email addresses can serve as an identity value, but the key must be identity.
+
+Example Events upload from Mixpanel:
+```
+clevertap-data-upload -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX" -mixpanelSecret="<mp api secret>" -t="event" -startDate="<yyyy-mm-dd>" -endDate="<yyyy-mm-dd>"
+
+```
+
+Example Profiles upload from Mixpanel:
+```
+clevertap-data-upload -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX" -mixpanelSecret="<mixpanel secret key>"
+
+```
