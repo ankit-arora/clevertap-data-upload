@@ -126,7 +126,7 @@ func Init() bool {
 		log.Println("Mixpanel events file path is supported only with events")
 		return false
 	}
-	if *Region != "eu" && *Region != "in" {
+	if *Region != "eu" && *Region != "in" && *Region != "sk" {
 		log.Println("Region can be either eu or in")
 		return false
 	}
