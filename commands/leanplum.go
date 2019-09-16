@@ -191,9 +191,9 @@ func (l *leanplumRecordInfo) getObjectID() string {
 /*
 [{
 		"type": "meta",
-		"tk": "000-001",
+		"tk": "<token>",
 		"g": "__g63a14d2f600d42fa9346def003f620c19645ankit1",
-		"id": "ZWW-WWW-WWRZ",
+		"id": "<account id>",
 		"af": {
 			"Version Name": "1.0.6",
 			"App Version": "1.0.6",
