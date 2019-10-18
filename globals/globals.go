@@ -73,7 +73,7 @@ func Init() bool {
 	AccountToken = flag.String("tk", "", "CleverTap Account Token")
 	EvtName = flag.String("evtName", "", "Event name")
 	Type = flag.String("t", "profile", "The type of data, either profile, event, or both, defaults to profile")
-	Region = flag.String("r", "eu", "The account region, either eu or in, defaults to eu")
+	Region = flag.String("r", "eu", "The account region, either eu, in, sk, or sg, defaults to eu")
 	DryRun = flag.Bool("dryrun", false, "Do a dry run, process records but do not upload")
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
