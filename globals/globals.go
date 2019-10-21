@@ -183,7 +183,7 @@ func ParseSchema(file *os.File) bool {
 		"key 3": "Float[]",
 		"key 4": "Integer[]",
 		"key 5": "String[]",
-		"kay 6": "Boolean[]"
+		"key 6": "Boolean[]"
 	}
 	*/
 	err := json.NewDecoder(file).Decode(&Schema)
