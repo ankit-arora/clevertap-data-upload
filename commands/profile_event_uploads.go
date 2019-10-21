@@ -165,6 +165,48 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 						propertyData[key] = v
 					}
 				}
+				if *globals.Type == "profile" {
+
+					if dataType == "integer[]" {
+						v, err := strconv.ParseInt(ep, 10, 64)
+						if err == nil {
+							addArray := make(map[string][]int64)
+							addArray["$add"] = append(addArray["$add"], v)
+
+							propertyData[key] = addArray
+
+						}
+					}
+
+					if dataType == "string[]" {
+
+						addArray := make(map[string][]string)
+						addArray["$add"] = append(addArray["$add"], ep)
+
+						propertyData[key] = addArray
+
+					}
+
+					if dataType == "boolean[]" {
+						v, err := strconv.ParseBool(strings.ToLower(ep))
+						if err == nil {
+							addArray := make(map[string][]bool)
+							addArray["$add"] = append(addArray["$add"], v)
+
+							propertyData[key] = addArray
+
+						}
+					}
+					if dataType == "float[]" {
+						v, err := strconv.ParseFloat(ep, 64)
+						if err == nil {
+							addArray := make(map[string][]float64)
+							addArray["$add"] = append(addArray["$add"], v)
+
+							propertyData[key] = addArray
+						}
+					}
+				}
 			}
 		}
 		_, ok := propertyData[key]
