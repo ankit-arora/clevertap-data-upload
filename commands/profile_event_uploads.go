@@ -127,14 +127,33 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 				continue
 			}
 
-			epI, err := strconv.Atoi(ep)
+			tsVal := ep
 
-			if err != nil {
-				log.Println("Timestamp is in wrong format. Should be an epoch in seconds")
-				return nil, false
+			if globals.Schema != nil {
+				dataType, ok := globals.Schema[key]
+				if ok {
+					dataTypeLower := strings.ToLower(dataType)
+					if strings.HasPrefix(dataTypeLower, "date") {
+						split := strings.Split(dataType, ":")
+						t, err := time.Parse(split[1], tsVal)
+						if err != nil {
+							log.Println("Timestamp is in wrong format. Should be in " + dataType)
+							return nil, false
+						}
+						epTs = t.Unix()
+					}
+				}
+			} else {
+				epI, err := strconv.Atoi(tsVal)
+
+				if err != nil {
+					log.Println("Timestamp is in wrong format. Should be an epoch in seconds")
+					return nil, false
+				}
+
+				epTs = int64(epI)
 			}
 
-			epTs = int64(epI)
 			record["ts"] = epTs
 			continue
 		}
@@ -146,6 +165,15 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 		if globals.Schema != nil {
 			dataType, ok := globals.Schema[key]
 			if ok {
+				dataTypeLower := strings.ToLower(dataType)
+				if strings.HasPrefix(dataTypeLower, "date") {
+					split := strings.Split(dataType, "$")
+					t, err := time.Parse(split[1], ep+" "+split[2])
+					if err == nil {
+						epoch := t.Unix()
+						propertyData[key] = "$D_" + strconv.FormatInt(epoch, 10)
+					}
+				}
 				dataType = strings.ToLower(dataType)
 				if dataType == "float" {
 					v, err := strconv.ParseFloat(ep, 64)
