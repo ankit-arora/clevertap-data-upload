@@ -59,7 +59,32 @@ func isIdentity(val string) bool {
 	return false
 }
 
+func substr(input string, start int, length int) string {
+	asRunes := []rune(input)
+	if start >= len(asRunes) {
+		return ""
+	}
+	if start+length > len(asRunes) {
+		length = len(asRunes) - start
+	}
+	return string(asRunes[start : start+length])
+}
+
+func cleanKeys(keys []string) []string {
+	cleanKeys := make([]string, len(keys))
+	i := 0
+	for _, val := range keys {
+		if strings.HasPrefix(val, "\ufeff") {
+			val = substr(val, 1, len(val))
+		}
+		cleanKeys[i] = val
+		i++
+	}
+	return cleanKeys
+}
+
 func processHeader(keys []string) bool {
+	keys = cleanKeys(keys)
 	identityExists := false
 
 	for _, val := range keys {
