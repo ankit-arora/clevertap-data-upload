@@ -159,8 +159,8 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 				if ok {
 					dataTypeLower := strings.ToLower(dataType)
 					if strings.HasPrefix(dataTypeLower, "date") {
-						split := strings.Split(dataType, ":")
-						t, err := time.Parse(split[1], tsVal)
+						split := strings.Split(dataType, "$")
+						t, err := time.Parse(split[1], tsVal+" "+split[2])
 						if err != nil {
 							log.Println("Timestamp is in wrong format. Should be in " + dataType)
 							return nil, false
