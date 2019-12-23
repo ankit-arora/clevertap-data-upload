@@ -95,7 +95,7 @@ func Get() Command {
 		return &uploadRecordsFromLeanplum{}
 	}
 
-	if *globals.CSVFilePath != "" && (*globals.Type == "profile" || *globals.Type == "event") {
+	if (*globals.JSONFilePath != "" || *globals.CSVFilePath != "") && (*globals.Type == "profile" || *globals.Type == "event") {
 		return &uploadEventsProfilesFromCSVCommand{}
 	}
 

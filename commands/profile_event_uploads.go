@@ -1,6 +1,9 @@
 package commands
 
 import (
+	"bufio"
+	"encoding/json"
+	"os"
 	"strings"
 	"sync"
 
@@ -33,7 +36,15 @@ func (u *uploadEventsProfilesFromCSVCommand) Execute() {
 	done := make(chan interface{})
 
 	var wg sync.WaitGroup
-	batchAndSendToCTAPI(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
+
+	if *globals.CSVFilePath != "" {
+		batchAndSendToCTAPI(done, processCSVLineForUpload(done, csvLineGenerator(done)), &wg)
+	}
+
+	if *globals.JSONFilePath != "" {
+		batchAndSendToCTAPI(done, jsonLineGenerator(done), &wg)
+	}
+
 	wg.Wait()
 
 	log.Println("done")
@@ -44,6 +55,40 @@ func (u *uploadEventsProfilesFromCSVCommand) Execute() {
 	} else {
 		log.Printf("Events Processed: %v , Unprocessed: %v", Summary.ctProcessed, Summary.ctUnprocessed)
 	}
+}
+
+func jsonLineGenerator(done chan interface{}) <-chan interface{} {
+	recordStream := make(chan interface{})
+	go func() {
+		defer close(recordStream)
+		//read json file
+		file, err := os.Open(*globals.JSONFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		scanner.Split(ScanCRLF)
+		for scanner.Scan() {
+			s := scanner.Text()
+			s = strings.Trim(s, " \n \r")
+			var jsonData interface{}
+			err = json.NewDecoder(strings.NewReader(s)).Decode(&jsonData)
+			if err != nil {
+				log.Printf("Error in processing json record: %s : %s\n", s, err)
+			} else {
+				select {
+				case <-done:
+					return
+				case recordStream <- jsonData:
+				}
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	return recordStream
 }
 
 //identity, objectID, FBID or GPID

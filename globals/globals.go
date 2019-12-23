@@ -10,6 +10,7 @@ import (
 )
 
 var CSVFilePath *string
+var JSONFilePath *string
 var SchemaFilePath *string
 var MixpanelSecret *string
 var LeanplumClientKey *string
@@ -52,6 +53,7 @@ func Init() bool {
 	flag.Var(&MPEventsFilePaths, "mixpanelEventsFile", "Absolute path to the MixPanel events file")
 	flag.Var(&FEvents, "filterEvent", "Event to be filtered (would not be uploaded)")
 	CSVFilePath = flag.String("csv", "", "Absolute path to the csv file")
+	JSONFilePath = flag.String("json", "", "Absolute path to the json file")
 	SchemaFilePath = flag.String("schema", "", "Absolute path to the schema file")
 	MixpanelSecret = flag.String("mixpanelSecret", "", "Mixpanel API secret key")
 	LeanplumClientKey = flag.String("leanplumClientKey", "", "Leanplum Client Key")
@@ -77,11 +79,11 @@ func Init() bool {
 	DryRun = flag.Bool("dryrun", false, "Do a dry run, process records but do not upload")
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
-	if (*CSVFilePath == "" && *MixpanelSecret == "" && MPEventsFilePaths == nil && *ImportService == "") || *AccountID == "" || (*AccountPasscode == "" && *ImportService != "leanplumToS3" && *ImportService != "leanplumToS3Throttled") {
-		log.Println("Mixpanel secret or CSV file path or Mixpanel events file path or Import service option, account id, and passcode are mandatory")
+	if (*JSONFilePath == "" && *CSVFilePath == "" && *MixpanelSecret == "" && MPEventsFilePaths == nil && *ImportService == "") || *AccountID == "" || (*AccountPasscode == "" && *ImportService != "leanplumToS3" && *ImportService != "leanplumToS3Throttled") {
+		log.Println("Mixpanel secret or CSV file path or JSON file path or Mixpanel events file path or Import service option, account id, and passcode are mandatory")
 		return false
 	}
-	if *CSVFilePath != "" && *MixpanelSecret != "" {
+	if (*CSVFilePath != "" || *JSONFilePath != "") && *MixpanelSecret != "" {
 		log.Println("Both Mixpanel secret and CSV file path detected. Only one data source is allowed")
 		return false
 	}
