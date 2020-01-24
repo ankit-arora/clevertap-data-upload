@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"regexp"
 
 	"encoding/json"
 
@@ -92,7 +93,7 @@ func (p *mixpanelProfileRecordInfo) convertToCTAPIFormat() ([]interface{}, error
 
 	for _, r := range p.Results {
 		identity := r.DistinctID
-		if identity != "" {
+		if email, ok := r.Properties["$email"]; ok && isEmailValid(fmt.Sprintf("%v", email)) && identity != "" {
 			record := make(map[string]interface{})
 			record["identity"] = identity
 			record["ts"] = time.Now().Unix()
@@ -129,7 +130,7 @@ func (p *mixpanelProfileRecordInfo) convertToCTAPIFormat() ([]interface{}, error
 				//Email
 				//Phone
 
-				if k == "Email" || k == "Date Of Birth" || k == "Phone" {
+				if k == "Date Of Birth" || k == "Phone" || k == "transactions" || v == "Unknown" {
 					continue
 				}
 
@@ -139,7 +140,7 @@ func (p *mixpanelProfileRecordInfo) convertToCTAPIFormat() ([]interface{}, error
 			record["profileData"] = propertyData
 			records = append(records, record)
 		} else {
-			log.Printf("Identity not found for record. Skipping: %v", r)
+			log.Printf("Identity not found for record or email is not valid. Skipping: %v", r)
 		}
 	}
 	return records, nil
@@ -262,6 +263,11 @@ type mixpanelEventRecordInfo struct {
 	Properties map[string]interface{} `json:"properties,omitempty"`
 }
 
+func isEmailValid(email string) bool {
+	re := regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	return re.MatchString(email)
+}
+
 func (e *mixpanelEventRecordInfo) convertToCTAPIFormat() ([]interface{}, error) {
 	records := make([]interface{}, 0)
 	eventName := e.Event
@@ -269,11 +275,17 @@ func (e *mixpanelEventRecordInfo) convertToCTAPIFormat() ([]interface{}, error) 
 		log.Printf("Event name missing for record: %v . Skipping", e)
 		return records, nil
 	}
-	identity, ok := e.Properties["distinct_id"]
+	identity, ok := e.Properties["$email"]
 	if !ok {
-		log.Printf("Identity missing for record: %v . Skipping", e)
+		log.Printf("Email missing for record: %v . Skipping", e)
 		return records, nil
 	}
+
+	if !isEmailValid(fmt.Sprintf("%v", identity)) {
+		log.Printf("Email is not valid for record: %v . Skipping", e)
+		return records, nil
+	}
+
 	ts, ok := e.Properties["time"]
 	if !ok {
 		log.Printf("Time stamp missing for record: %v . Skipping", e)
@@ -288,6 +300,9 @@ func (e *mixpanelEventRecordInfo) convertToCTAPIFormat() ([]interface{}, error) 
 	}
 	if isEventRestricted {
 		eventName = "_" + eventName
+	}
+	if eventName == "ecommerce_purchase" || eventName == "complete_purchase" {
+		eventName = "Charged"
 	}
 	record := make(map[string]interface{})
 	record["identity"] = identity
