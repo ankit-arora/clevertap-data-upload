@@ -95,6 +95,14 @@ func Get() Command {
 		return &uploadRecordsFromLeanplum{}
 	}
 
+	if *globals.ImportService == "mparticle" {
+		return &uploadEventsFromMParticle{}
+	}
+
+	if *globals.ImportService == "amplitude" {
+		return &uploadDataFromAmplitude{}
+	}
+
 	if (*globals.JSONFilePath != "" || *globals.CSVFilePath != "") && (*globals.Type == "profile" || *globals.Type == "event") {
 		return &uploadEventsProfilesFromCSVCommand{}
 	}
@@ -109,10 +117,6 @@ func Get() Command {
 
 	if globals.MPEventsFilePaths != nil && len(globals.MPEventsFilePaths) > 0 && *globals.Type == "event" {
 		return &uploadEventsFromMixpanel{}
-	}
-
-	if *globals.ImportService == "mparticle" {
-		return &uploadEventsFromMParticle{}
 	}
 
 	return nil
