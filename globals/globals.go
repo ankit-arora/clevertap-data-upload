@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,8 @@ var DryRun *bool
 var StartTs *float64
 var LeanplumOutFilesPath *string
 var LeanplumAPIEndpoint *string
+var AmplitudeStart *string
+var AmplitudeEnd *string
 
 //var AutoConvert *bool
 
@@ -69,6 +72,8 @@ func Init() bool {
 		"<yyyy-mm-dd>")
 	EndDate = flag.String("endDate", "", "End date for exporting events "+
 		"<yyyy-mm-dd>")
+	AmplitudeStart = flag.String("amplitudeStart", "", "First hour included in data series, formatted YYYYMMDDTHH (e.g. '20150201T05')")
+	AmplitudeEnd = flag.String("amplitudeEnd", "", "Last hour included in data series, formatted YYYYMMDDTHH (e.g. '20150203T20')")
 	StartTs = flag.Float64("startTs", 0, "Start timestamp for events upload")
 	AccountID = flag.String("id", "", "CleverTap Account ID")
 	AccountPasscode = flag.String("p", "", "CleverTap Account Passcode")
@@ -120,6 +125,33 @@ func Init() bool {
 		s, _ := time.Parse("2006-01-02", *StartDate)
 		e, _ := time.Parse("2006-01-02", *EndDate)
 		if s.After(e) {
+			log.Println("Start date cannot be after End date")
+			return false
+		}
+	}
+	if *AmplitudeEnd != "" && *AmplitudeStart != "" {
+		//start date should be less than or equal to end date
+		e := strings.Split(*AmplitudeEnd, "T")
+		if len(e) != 2 {
+			log.Println("Amplitude end date is in invalid format")
+			return false
+		}
+		s := strings.Split(*AmplitudeStart, "T")
+		if len(s) != 2 {
+			log.Println("Amplitude start date is in invalid format")
+			return false
+		}
+		eTime, err := time.Parse("20060102", e[0])
+		if err != nil {
+			log.Println("Amplitude end date is in invalid format")
+			return false
+		}
+		sTime, err := time.Parse("20060102", s[0])
+		if err != nil {
+			log.Println("Amplitude start date is in invalid format")
+			return false
+		}
+		if sTime.After(eTime) {
 			log.Println("Start date cannot be after End date")
 			return false
 		}
