@@ -266,41 +266,60 @@ func processCSVUploadLine(vals []string, line string) (interface{}, bool) {
 				if *globals.Type == "profile" {
 
 					if dataType == "integer[]" {
-						v, err := strconv.ParseInt(ep, 10, 64)
-						if err == nil {
-							addArray := make(map[string][]int64)
-							addArray["$add"] = append(addArray["$add"], v)
 
+						addArray := make(map[string][]int64)
+						result := strings.Split(ep, ",")
+						for i := range result {
+							v, err := strconv.ParseInt(strings.TrimSpace(result[i]), 10, 64)
+							if err == nil {
+								addArray["$add"] = append(addArray["$add"], v)
+							}
+						}
+						if len(addArray["$add"]) > 0 {
 							propertyData[key] = addArray
-
 						}
 					}
 
 					if dataType == "string[]" {
 
 						addArray := make(map[string][]string)
-						addArray["$add"] = append(addArray["$add"], ep)
+						result := strings.Split(ep, ",")
+						for i := range result {
+							addArray["$add"] = append(addArray["$add"], strings.TrimSpace(result[i]))
+						}
 
-						propertyData[key] = addArray
+						if len(addArray["$add"]) > 0 {
+							propertyData[key] = addArray
+						}
 
 					}
 
 					if dataType == "boolean[]" {
-						v, err := strconv.ParseBool(strings.ToLower(ep))
-						if err == nil {
-							addArray := make(map[string][]bool)
-							addArray["$add"] = append(addArray["$add"], v)
 
+						addArray := make(map[string][]bool)
+						result := strings.Split(ep, ",")
+						for i := range result {
+							v, err := strconv.ParseBool(strings.ToLower(strings.TrimSpace(result[i])))
+							if err == nil {
+								addArray["$add"] = append(addArray["$add"], v)
+							}
+						}
+						if len(addArray["$add"]) > 0 {
 							propertyData[key] = addArray
-
 						}
 					}
-					if dataType == "float[]" {
-						v, err := strconv.ParseFloat(ep, 64)
-						if err == nil {
-							addArray := make(map[string][]float64)
-							addArray["$add"] = append(addArray["$add"], v)
 
+					if dataType == "float[]" {
+
+						addArray := make(map[string][]float64)
+						result := strings.Split(ep, ",")
+						for i := range result {
+							v, err := strconv.ParseFloat(strings.TrimSpace(result[i]), 64)
+							if err == nil {
+								addArray["$add"] = append(addArray["$add"], v)
+							}
+						}
+						if len(addArray["$add"]) > 0 {
 							propertyData[key] = addArray
 						}
 					}
