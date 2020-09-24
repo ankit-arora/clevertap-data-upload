@@ -2,8 +2,8 @@
 
 Installation:
 ```
-go get github.com/ankit-arora/clevertap-data-upload 
-go install github.com/ankit-arora/clevertap-data-upload
+go get github.com/CleverTap/clevertap-data-upload 
+go install github.com/CleverTap/clevertap-data-upload
 ```
 
 Arguments:
