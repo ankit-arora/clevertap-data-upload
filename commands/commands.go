@@ -249,13 +249,16 @@ func batchAndSendToCTAPI(done <-chan interface{}, recordStream <-chan interface{
 			defer wg.Done()
 			region := ""
 			if *globals.Region == "in" {
-				region = "in."
+				region = "in1."
 			}
 			if *globals.Region == "sk" {
 				region = "sk1."
 			}
 			if *globals.Region == "sg" {
 				region = "sg1."
+			}
+			if *globals.Region == "us" {
+				region = "us1."
 			}
 			var dataSlice []interface{}
 			for e := range recordStream {
