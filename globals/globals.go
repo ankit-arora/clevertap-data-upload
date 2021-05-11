@@ -75,7 +75,7 @@ func Init() bool {
 	AccountToken = flag.String("tk", "", "CleverTap Account Token")
 	EvtName = flag.String("evtName", "", "Event name")
 	Type = flag.String("t", "profile", "The type of data, either profile, event, or both, defaults to profile")
-	Region = flag.String("r", "eu", "The account region, either eu, in, sk, or sg, defaults to eu")
+	Region = flag.String("r", "eu", "The account region, either eu, in, sk,us ,or sg, defaults to eu")
 	DryRun = flag.Bool("dryrun", false, "Do a dry run, process records but do not upload")
 	//AutoConvert = flag.Bool("autoConvert", false, "automatically covert property value type to number for number entries")
 	flag.Parse()
@@ -128,8 +128,8 @@ func Init() bool {
 		log.Println("Mixpanel events file path is supported only with events")
 		return false
 	}
-	if *Region != "eu" && *Region != "in" && *Region != "sk" && *Region != "sg" {
-		log.Println("Region can be either eu, in, sk, or sg")
+	if *Region != "eu" && *Region != "in" && *Region != "sk" && *Region != "sg" && *Region != "us" {
+		log.Println("Region can be either eu, in, sk, us or sg")
 		return false
 	}
 	if *ImportService == "mparticle" && (*AWSSecretAccessKey == "" || *AWSAccessKeyID == "" || *S3Bucket == "" ||
