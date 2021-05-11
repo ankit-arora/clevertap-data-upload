@@ -117,7 +117,7 @@ type mparticleEventRecordInfo struct {
 	DeviceInfo            map[string]interface{} `json:"device_info,omitempty"`
 	UserAttributes        map[string]interface{} `json:"user_attributes,omitempty"`
 	DeletedUserAttributes []interface{}          `json:"deleted_user_attributes,omitempty"`
-	UserIdentities        map[string]interface{} `json:"user_identities,omitempty"`
+	UserIdentities        []map[string]string `json:"user_identities,omitempty"`
 	ApplicationInfo       map[string]interface{} `json:"application_info,omitempty"`
 	SchemaVersion         float64                `json:"schema_version,omitempty"`
 	Environment           string                 `json:"environment,omitempty"`
@@ -171,28 +171,24 @@ func (info *mparticleEventRecordInfo) convertToCTAPIFormat() ([]interface{}, err
 		record["ts"] = ts / 1000
 
 		customAttributes := eventData["custom_attributes"].(map[string]interface{})
-		userID, ok := customAttributes["user_id"]
 
-		if ok && userID.(string) != "-1" {
+                idmap := make(map[string]string)
+		for _, element := range info.UserIdentities {
+                  idmap[element["identity_type"]] = element["identity"]
+                }
+
+                // email, ok := idmap["email"]
+                userID, ok := idmap["customer_id"]
+
+		if ok && userID != "-1" {
 			//send userId as identity
-			identity := userID.(string)
+			identity := userID
 			record["identity"] = identity
 		} else {
 			//generate objectId from advertising id
-			androidAdID, ok := info.DeviceInfo["android_advertising_id"]
-			if ok {
-				record["objectId"] = "__g" + strings.Replace(androidAdID.(string), "-", "", -1)
-			} else {
-				iosAdID, ok := info.DeviceInfo["ios_advertising_id"]
-				if ok {
-					record["objectId"] = "-g" + strings.Replace(iosAdID.(string), "-", "", -1)
-				} else {
-					log.Printf("Both user_id and advertising ids are missing for record: %v . Skipping", eventFromMParticle)
+					log.Printf("User ID missing: %v . Skipping", eventFromMParticle)
 					continue
-				}
-			}
-
-		}
+                }
 
 		propData := make(map[string]interface{})
 		for k, v := range customAttributes {
