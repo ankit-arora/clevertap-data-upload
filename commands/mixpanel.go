@@ -117,6 +117,10 @@ func (p *mixpanelProfileRecordInfo) convertToCTAPIFormat() ([]interface{}, error
 				//
 				//}
 
+				if k == "Email" && propertyData[k] != nil {
+					continue
+				}
+
 				if strings.HasPrefix(k, "$") {
 					k = k[1:]
 				}
@@ -129,7 +133,7 @@ func (p *mixpanelProfileRecordInfo) convertToCTAPIFormat() ([]interface{}, error
 				//Email
 				//Phone
 
-				if k == "Email" || k == "Date Of Birth" || k == "Phone" {
+				if k == "Date Of Birth" || k == "Phone" {
 					continue
 				}
 
