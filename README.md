@@ -56,3 +56,5 @@ Example Profiles upload from Mixpanel:
 clevertap-data-upload -id="XXX-XXX-XXXX" -p="XXX-XXX-XXXX" -mixpanelSecret="<mixpanel secret key>"
 
 ```
+
+**Note: This script works best with Go version less then 1.13**
